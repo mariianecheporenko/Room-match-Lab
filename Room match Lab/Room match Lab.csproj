@@ -8,16 +8,29 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="tests\RoomMates.Tests\RoomMates.Tests.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
+  <!-- Keep the nested test project and its generated obj files out of the web app build. -->
   <ItemGroup>
-    <Folder Include="tests\RoomMates.Tests\obj\Release\net10.0\refint\" />
-    <Folder Include="tests\RoomMates.Tests\obj\Release\net10.0\ref\" />
+    <Compile Remove="tests - Copy\**" />
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests - Copy\**" />
+    <Content Remove="tests\**\*" />
+    <EmbeddedResource Remove="tests - Copy\**" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests - Copy\**" />
+    <None Remove="tests\**\*" />
   </ItemGroup>
 
 </Project>
