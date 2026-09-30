@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Housings?skip=0&limit=5"
+method: GET
+queryParams:
+  skip: "0"
+  limit: "5"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 200 OK\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Response time is under 500ms\", function () {\r
+
+      \    pm.expect(pm.response.responseTime).to.be.below(500);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Returns array of listings\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    pm.expect(data).to.be.an(\"array\");\r
+
+      \    pm.expect(data.length).to.be.at.most(5);\r
+
+      });"
+    language: text/javascript
+order: 6000

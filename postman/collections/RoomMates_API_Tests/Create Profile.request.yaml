@@ -1,0 +1,49 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Profiles"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"fullName\": \"Student Test User\",\r
+
+    \  \"email\": \"student.test.{{$timestamp}}@knu.ua\",\r
+
+    \  \"avatarUrl\": \"https://example.com/avatar.jpg\",\r
+
+    \  \"budget\": 9000,\r
+
+    \  \"cleanliness\": 4,\r
+
+    \  \"sleepSchedule\": 3,\r
+
+    \  \"partyTolerance\": 2,\r
+
+    \  \"isSmoker\": false,\r
+
+    \  \"hasOwnPets\": false,\r
+
+    \  \"petTolerance\": 1\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 201 Created\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(201);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Profile created and ID returned\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    pm.expect(data.id).to.not.be.empty;\r
+
+      \    pm.collectionVariables.set(\"profileId\", data.id);\r
+
+      });"
+    language: text/javascript
+order: 1000

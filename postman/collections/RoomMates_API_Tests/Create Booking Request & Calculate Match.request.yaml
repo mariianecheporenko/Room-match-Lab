@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/api/BookingRequests"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"profileId\": \"{{profileId}}\",\r
+
+    \  \"housingId\": \"{{housingId}}\"\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 201 Created\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(201);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Compatibility match score calculated properly\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    pm.expect(data.matchScore).to.be.a(\"number\");\r
+
+      \    pm.expect(data.matchScore).to.be.within(0, 100);\r
+
+      \    pm.expect(data.status).to.eql(\"Pending\");\r
+
+      });"
+    language: text/javascript
+order: 7000

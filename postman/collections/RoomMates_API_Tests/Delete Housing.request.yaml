@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Housings/{{housingId}}"
+method: DELETE
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 200 or 204 (Deleted)\", function () {\r
+
+      \    pm.expect(pm.response.code).to.be.oneOf([200, 204]);\r
+
+      });"
+    language: text/javascript
+order: 1215247881869739

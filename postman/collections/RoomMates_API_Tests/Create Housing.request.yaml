@@ -1,0 +1,55 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Housings"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"title\": \"Cozy Student Apartment near Campus\",\r
+
+    \  \"pricePerMonth\": 8000,\r
+
+    \  \"city\": \"Kyiv\",\r
+
+    \  \"street\": \"Zoii Butenko\",\r
+
+    \  \"buildingNumber\": \"55\",\r
+
+    \  \"district\": \"Holosiivskyi\",\r
+
+    \  \"latitude\": 50.3845,\r
+
+    \  \"longitude\": 30.4851,\r
+
+    \  \"allowsSmoking\": false,\r
+
+    \  \"petPolicy\": 1,\r
+
+    \  \"requiredCleanliness\": 4,\r
+
+    \  \"requiredSleepSchedule\": 3,\r
+
+    \  \"requiredPartyTolerance\": 2\r
+
+    }"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 201 Created\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(201);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Housing created and ID returned\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    pm.expect(data.id).to.not.be.empty;\r
+
+      \    pm.collectionVariables.set(\"housingId\", data.id);\r
+
+      });"
+    language: text/javascript
+order: 4000
