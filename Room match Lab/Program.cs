@@ -32,7 +32,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "RoomMates API v1");
-    c.RoutePrefix = "swagger"; // гарантує шлях /swagger
+    c.RoutePrefix = "swagger";
 });
 
 // Configure the HTTP request pipeline.

@@ -1,0 +1,321 @@
+{
+  "info": {
+    "name": "RoomMates_API_Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201 Created\", function () {",
+              "    pm.expect(pm.response.code).to.eql(201);",
+              "});",
+              "",
+              "pm.test(\"Profile created and ID returned\", function () {",
+              "    var data = pm.response.json();",
+              "    pm.expect(data.id).to.not.be.empty;",
+              "    pm.collectionVariables.set(\"profileId\", data.id);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Profiles"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Student Test User\",\n  \"email\": \"student.test.{{$timestamp}}@knu.ua\",\n  \"avatarUrl\": \"https://example.com/avatar.jpg\",\n  \"budget\": 9000,\n  \"cleanliness\": 4,\n  \"sleepSchedule\": 3,\n  \"partyTolerance\": 2,\n  \"isSmoker\": false,\n  \"hasOwnPets\": false,\n  \"petTolerance\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Get Profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200 OK\", function () {",
+              "    pm.expect(pm.response.code).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"ID matches saved profile\", function () {",
+              "    var data = pm.response.json();",
+              "    pm.expect(data.id).to.eql(pm.collectionVariables.get(\"profileId\"));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Profiles/{{profileId}}"
+        }
+      }
+    },
+    {
+      "name": "Create Housing",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201 Created\", function () {",
+              "    pm.expect(pm.response.code).to.eql(201);",
+              "});",
+              "",
+              "pm.test(\"Housing created and ID returned\", function () {",
+              "    var data = pm.response.json();",
+              "    pm.expect(data.id).to.not.be.empty;",
+              "    pm.collectionVariables.set(\"housingId\", data.id);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Housings"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Cozy Student Apartment near Campus\",\n  \"pricePerMonth\": 8000,\n  \"city\": \"Kyiv\",\n  \"street\": \"Zoii Butenko\",\n  \"buildingNumber\": \"55\",\n  \"district\": \"Holosiivskyi\",\n  \"latitude\": 50.3845,\n  \"longitude\": 30.4851,\n  \"allowsSmoking\": false,\n  \"petPolicy\": 1,\n  \"requiredCleanliness\": 4,\n  \"requiredSleepSchedule\": 3,\n  \"requiredPartyTolerance\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Non-existing housing",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 404 Not Found\", function () {",
+              "    pm.expect(pm.response.code).to.eql(404);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Housings/00000000-0000-0000-0000-000000000000"
+        }
+      }
+    },
+    {
+      "name": "Get Housings with Pagination",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200 OK\", function () {",
+              "    pm.expect(pm.response.code).to.eql(200);",
+              "});",
+              "",
+              "pm.test(\"Response time is under 500ms\", function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(500);",
+              "});",
+              "",
+              "pm.test(\"Returns array of listings\", function () {",
+              "    var data = pm.response.json();",
+              "    pm.expect(data).to.be.an(\"array\");",
+              "    pm.expect(data.length).to.be.at.most(5);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Housings",
+          "query": [
+            {
+              "key": "skip",
+              "value": "0"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Booking Request & Calculate Match",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201 Created\", function () {",
+              "    pm.expect(pm.response.code).to.eql(201);",
+              "});",
+              "",
+              "pm.test(\"Compatibility match score calculated properly\", function () {",
+              "    var data = pm.response.json();",
+              "    pm.expect(data.matchScore).to.be.a(\"number\");",
+              "    pm.expect(data.matchScore).to.be.within(0, 100);",
+              "    pm.expect(data.status).to.eql(\"Pending\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/BookingRequests"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profileId\": \"{{profileId}}\",\n  \"housingId\": \"{{housingId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Profile non-valid scale",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 400 Bad Request\", function () {",
+              "    pm.expect(pm.response.code).to.eql(400);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Profiles"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Student Test User\",\n  \"email\": \"student.test.{{$timestamp}}@knu.ua\",\n  \"avatarUrl\": \"https://example.com/avatar.jpg\",\n  \"budget\": 9000,\n  \"cleanliness\": 10,\n  \"sleepSchedule\": 3,\n  \"partyTolerance\": 2,\n  \"isSmoker\": false,\n  \"hasOwnPets\": false,\n  \"petTolerance\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Profile negative budget",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 400 Bad Request\", function () {",
+              "    pm.expect(pm.response.code).to.eql(400);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Profiles"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Student Test User\",\n  \"email\": \"student.test.{{$timestamp}}@knu.ua\",\n  \"avatarUrl\": \"https://example.com/avatar.jpg\",\n  \"budget\": -9000,\n  \"cleanliness\": 4,\n  \"sleepSchedule\": 3,\n  \"partyTolerance\": 2,\n  \"isSmoker\": false,\n  \"hasOwnPets\": false,\n  \"petTolerance\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Delete Housing",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200 or 204 (Deleted)\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/Housings/{{housingId}}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "profileId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "housingId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
