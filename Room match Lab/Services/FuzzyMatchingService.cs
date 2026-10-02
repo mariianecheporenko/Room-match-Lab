@@ -3,6 +3,7 @@ namespace RoomMates.Services;
 public class FuzzyMatchingService : IFuzzyMatchingService
 {
     public bool IsDuplicateOrTypo(string inputName, IEnumerable<string> existingNames, int maxDistance = 2) =>
+        !string.IsNullOrWhiteSpace(inputName) && existingNames is not null &&
         FindSimilarName(inputName, existingNames, maxDistance) is not null;
 
     public string? FindSimilarName(string inputName, IEnumerable<string> existingNames, int maxDistance = 2)

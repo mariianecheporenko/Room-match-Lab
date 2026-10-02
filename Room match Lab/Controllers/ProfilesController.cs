@@ -43,6 +43,8 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         ProfileUpsertRequest request,
         CancellationToken cancellationToken)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
         var validationError = ValidateRequest(request);
         if (validationError is not null) return BadRequest(new { error = validationError });
 
@@ -81,6 +83,8 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         ProfileUpsertRequest request,
         CancellationToken cancellationToken)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
         var validationError = ValidateRequest(request);
         if (validationError is not null) return BadRequest(new { error = validationError });
 

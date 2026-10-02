@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoomMates API - Каталог</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light pb-5">
+
+    <nav class="navbar fixed-top navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">RoomMates</span>
+            <span class="text-light d-none d-md-block">Контакти: +38 (044) 123-45-67 | support@roommates.knu.ua</span>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 80px;">
+        <h2 class="mb-4">Доступне житло</h2>
+
+        <table class="table table-bordered table-striped bg-white">
+            <thead class="table-dark">
+                <tr>
+                    <th>Назва</th>
+                    <th>Місто та Район</th>
+                    <th>Ціна (грн/міс)</th>
+                    <th>Куріння</th>
+                    <th>Тварини</th>
+                </tr>
+            </thead>
+            <tbody id="housings-table-body">
+                <tr>
+                    <td colspan="5" class="text-center">Завантаження даних...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    fetch('/api/Housings?skip=0&limit=10')
+                        .then(function(response) { return response.json(); })
+                        .then(function(data) {
+                            var tbody = document.getElementById('housings-table-body');
+                            if (!tbody) return; 
+
+                            tbody.innerHTML = '';
+                            var items = data.items || data;
+
+                            if (!items || items.length === 0) {
+                                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Житло не знайдено</td></tr>';
+                                return;
+                            }
+
+                            items.forEach(function(/** @type {any} */ housing) {
+                                var tr = document.createElement('tr');
+                                var petText = housing.petPolicy === 0 ? 'Заборонено' : (housing.petPolicy === 1 ? 'Дозволено' : 'Умовно');
+                                var smokingText = housing.allowsSmoking ? 'Так' : 'Ні';
+
+                                tr.innerHTML =
+                                    '<td><strong>' + housing.title + '</strong></td>' +
+                                    '<td>' + housing.city + ', ' + housing.district + '</td>' +
+                                    '<td>' + housing.pricePerMonth + '</td>' +
+                                    '<td>' + smokingText + '</td>' +
+                                    '<td>' + petText + '</td>';
+                                tbody.appendChild(tr);
+                            });
+                        })
+                        .catch(function(error) {
+                            console.error('Помилка:', error);
+                            var tbody = document.getElementById('housings-table-body');
+                            if (tbody) {
+                                tbody.innerHTML = '<tr><td colspan="5" class="text-danger text-center">Помилка завантаження даних</td></tr>';
+                            }
+                        });
+                });
+    </script>
+</body>
+</html>

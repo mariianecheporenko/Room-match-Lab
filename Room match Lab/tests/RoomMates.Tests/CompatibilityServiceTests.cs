@@ -9,196 +9,164 @@ public class CompatibilityServiceTests
     private readonly CompatibilityService _service = new();
 
     [Fact]
-    public void CalculateMatchScore_ReturnsOneHundredForPerfectCompatibleMatch()
+    public void CalculateMatchScore_NullArguments_Throws()
     {
-        // Arrange
-        var profile = new Profile { Budget = 1_000, Cleanliness = 4, SleepSchedule = 2, PartyTolerance = 5 };
-        var housing = new Housing
-        {
-            PricePerMonth = 900,
-            RequiredCleanliness = 4,
-            RequiredSleepSchedule = 2,
-            RequiredPartyTolerance = 5,
-            AllowsSmoking = true
-        };
+        Action nullProfile = () => _service.CalculateMatchScore(null!, new Housing());
+        Action nullHousing = () => _service.CalculateMatchScore(new Profile(), null!);
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(100.0);
+        nullProfile.Should().Throw<ArgumentNullException>().WithParameterName("profile");
+        nullHousing.Should().Throw<ArgumentNullException>().WithParameterName("housing");
     }
 
     [Fact]
-    public void CalculateMatchScore_ReturnsZeroForPolarOppositeCoreScales()
+    public void CalculateMatchScore_BudgetOverLimit_IsDealbreaker()
     {
-        // Arrange
-        var profile = new Profile
-        {
-            Budget = 1_000,
-            Cleanliness = 1,
-            SleepSchedule = 1,
-            PartyTolerance = 1
-        };
+        var score = _service.CalculateMatchScore(new Profile { Budget = 5_000 }, new Housing { PricePerMonth = 6_000 });
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void CalculateMatchScore_SmokerNotAllowed_IsDealbreaker()
+    {
+        var score = _service.CalculateMatchScore(
+            new Profile { Budget = 5_000, IsSmoker = true },
+            new Housing { PricePerMonth = 1_000, AllowsSmoking = false });
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void CalculateMatchScore_OwnPetsNotAllowed_IsDealbreaker()
+    {
+        var score = _service.CalculateMatchScore(
+            new Profile { Budget = 5_000, OwnPets = true },
+            new Housing { PricePerMonth = 1_000, PetPolicy = PetPolicy.NotAllowed });
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void CalculateMatchScore_ProfileCannotTolerateExistingPets_IsDealbreaker()
+    {
+        var score = _service.CalculateMatchScore(
+            new Profile { Budget = 5_000, PetTolerance = PetPolicy.NotAllowed },
+            new Housing { PricePerMonth = 1_000, PetPolicy = PetPolicy.Allowed, HasExistingPets = true });
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void CalculateMatchScore_PerfectLifestyleAndSufficientBudget_ReturnsOneHundred()
+    {
+        var profile = new Profile { Budget = 5_000, Cleanliness = 4, SleepSchedule = 2, PartyTolerance = 5 };
         var housing = new Housing
         {
-            PricePerMonth = 500,
+            PricePerMonth = 5_000,
+            RequiredCleanliness = 4,
+            RequiredSleepSchedule = 2,
+            RequiredPartyTolerance = 5
+        };
+
+        _service.CalculateMatchScore(profile, housing).Should().Be(100.0);
+    }
+
+    [Fact]
+    public void CalculateMatchScore_OppositeLifestyleScales_HasZeroBaseScore()
+    {
+        var profile = new Profile { Budget = 5_000, Cleanliness = 1, SleepSchedule = 1, PartyTolerance = 1 };
+        var housing = new Housing
+        {
+            PricePerMonth = 1_000,
             RequiredCleanliness = 5,
             RequiredSleepSchedule = 5,
             RequiredPartyTolerance = 5
         };
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(0.0);
+        _service.CalculateMatchScore(profile, housing).Should().Be(0.0);
     }
 
     [Fact]
-    public void CalculateMatchScore_ReturnsZeroWhenBudgetIsBelowPrice()
+    public void CalculateMatchScore_NoSharedTags_AddsNoBonus()
     {
-        // Arrange
-        var profile = new Profile { Budget = 499 };
+        var profile = new Profile { Budget = 1_000 };
+        profile.ProfileTags.Add(new ProfileTag { TagId = Guid.NewGuid() });
         var housing = new Housing { PricePerMonth = 500 };
+        housing.HousingTags.Add(new HousingTag { TagId = Guid.NewGuid() });
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(0.0);
+        _service.CalculateMatchScore(profile, housing).Should().Be(100.0);
     }
 
     [Fact]
-    public void CalculateMatchScore_ReturnsZeroForSmokingConflict()
+    public void CalculateMatchScore_TwoSharedTags_AddsFourPercentagePoints()
     {
-        // Arrange
-        var profile = new Profile { Budget = 1_000, IsSmoker = true };
-        var housing = new Housing { PricePerMonth = 500, AllowsSmoking = false };
+        var firstTag = Guid.NewGuid();
+        var secondTag = Guid.NewGuid();
+        var profile = new Profile { Budget = 1_000, Cleanliness = 1 };
+        profile.ProfileTags.Add(new ProfileTag { TagId = firstTag });
+        profile.ProfileTags.Add(new ProfileTag { TagId = secondTag });
+        var housing = new Housing { PricePerMonth = 500, RequiredCleanliness = 3 };
+        housing.HousingTags.Add(new HousingTag { TagId = firstTag });
+        housing.HousingTags.Add(new HousingTag { TagId = secondTag });
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(0.0);
+        _service.CalculateMatchScore(profile, housing).Should().BeApproximately(87.3333333333, 0.000001);
     }
 
     [Fact]
-    public void CalculateMatchScore_ReturnsZeroWhenOwnPetsAreNotAllowed()
+    public void CalculateMatchScore_OwnPetsWithConditionalPolicy_DeductsFivePoints()
     {
-        // Arrange
-        var profile = new Profile { Budget = 1_000, OwnPets = true };
-        var housing = new Housing { PricePerMonth = 500, PetPolicy = PetPolicy.NotAllowed };
-
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(0.0);
-    }
-
-    [Fact]
-    public void CalculateMatchScore_ReturnsZeroWhenProfileDoesNotTolerateExistingPets()
-    {
-        // Arrange
-        var profile = new Profile { Budget = 1_000, PetTolerance = PetPolicy.NotAllowed };
-        var housing = new Housing
-        {
-            PricePerMonth = 500,
-            PetPolicy = PetPolicy.Allowed,
-            HasExistingPets = true
-        };
-
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(0.0);
-    }
-
-    [Fact]
-    public void CalculateMatchScore_AppliesFivePointConditionalPetPenalty()
-    {
-        // Arrange
         var profile = new Profile { Budget = 1_000, OwnPets = true };
         var housing = new Housing { PricePerMonth = 500, PetPolicy = PetPolicy.Conditional };
-
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(95.0);
+        _service.CalculateMatchScore(profile, housing).Should().Be(95.0);
     }
 
     [Fact]
-    public void CalculateMatchScore_AddsFourPointsForTwoMatchingTags()
+    public void CalculateMatchScore_NoOwnPetsAndPetsProhibited_HasNoPetPenalty()
     {
-        // Arrange
-        var firstTagId = Guid.NewGuid();
-        var secondTagId = Guid.NewGuid();
-        var profileWithoutTags = new Profile { Budget = 1_000, Cleanliness = 1 };
-        var housingWithoutTags = new Housing { PricePerMonth = 500, RequiredCleanliness = 3 };
-        var profile = new Profile { Budget = 1_000, Cleanliness = 1 };
-        profile.ProfileTags.Add(new ProfileTag { TagId = firstTagId });
-        profile.ProfileTags.Add(new ProfileTag { TagId = secondTagId });
-
-        var housing = new Housing { PricePerMonth = 500, RequiredCleanliness = 3 };
-        housing.HousingTags.Add(new HousingTag { TagId = firstTagId });
-        housing.HousingTags.Add(new HousingTag { TagId = secondTagId });
-
-        // Act
-        var baseScore = _service.CalculateMatchScore(profileWithoutTags, housingWithoutTags);
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().BeApproximately(baseScore + 4.0, 0.0001);
+        var profile = new Profile { Budget = 1_000, OwnPets = false };
+        var housing = new Housing { PricePerMonth = 500, PetPolicy = PetPolicy.NotAllowed };
+        _service.CalculateMatchScore(profile, housing).Should().Be(100.0);
     }
 
     [Fact]
-    public void CalculateMatchScore_ClampsExtremeBonusToOneHundred()
+    public void CalculateMatchScore_ExcessiveTagBonus_ClampsToOneHundred()
     {
-        // Arrange
         var profile = new Profile { Budget = 1_000 };
         var housing = new Housing { PricePerMonth = 500 };
-        for (var index = 0; index < 3; index++)
+        for (var i = 0; i < 3; i++)
         {
             var tagId = Guid.NewGuid();
             profile.ProfileTags.Add(new ProfileTag { TagId = tagId });
             housing.HousingTags.Add(new HousingTag { TagId = tagId });
         }
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
-
-        // Assert
-        score.Should().Be(100.0);
+        _service.CalculateMatchScore(profile, housing).Should().Be(100.0);
     }
 
     [Fact]
-    public void CalculateMatchScore_ClampsExtremePenaltyToZero()
+    public void CalculateMatchScore_PetPenaltyAtZeroBase_ClampsAtZero()
     {
-        // Arrange
         var profile = new Profile
         {
-            Budget = 1_000,
-            OwnPets = true,
-            Cleanliness = 1,
-            SleepSchedule = 1,
-            PartyTolerance = 1
+            Budget = 1_000, OwnPets = true,
+            Cleanliness = 1, SleepSchedule = 1, PartyTolerance = 1
         };
         var housing = new Housing
         {
-            PricePerMonth = 500,
-            PetPolicy = PetPolicy.Conditional,
-            RequiredCleanliness = 5,
-            RequiredSleepSchedule = 5,
-            RequiredPartyTolerance = 5
+            PricePerMonth = 500, PetPolicy = PetPolicy.Conditional,
+            RequiredCleanliness = 5, RequiredSleepSchedule = 5, RequiredPartyTolerance = 5
         };
 
-        // Act
-        var score = _service.CalculateMatchScore(profile, housing);
+        _service.CalculateMatchScore(profile, housing).Should().Be(0.0);
+    }
 
-        // Assert
-        score.Should().Be(0.0);
+    [Fact]
+    public void CalculateMatchScore_CustomRequirements_OnlyMatchingProfileCriteriaAffectScore()
+    {
+        var criterionId = Guid.NewGuid();
+        var unmatchedCriterionId = Guid.NewGuid();
+        var profile = new Profile { Budget = 1_000 };
+        profile.CustomCriterionValues.Add(new ProfileCriterionValue { LifestyleCriterionId = criterionId, Value = 1 });
+        var housing = new Housing { PricePerMonth = 500 };
+        housing.CustomRequirements.Add(new HousingCriterionRequirement { LifestyleCriterionId = criterionId, TargetValue = 5 });
+        housing.CustomRequirements.Add(new HousingCriterionRequirement { LifestyleCriterionId = unmatchedCriterionId, TargetValue = 5 });
+
+        _service.CalculateMatchScore(profile, housing).Should().Be(75.0);
     }
 }
