@@ -12,24 +12,20 @@ scripts:
 
       });\r
 
-      \r
-
       pm.test(\"Response time is under 500ms\", function () {\r
 
       \    pm.expect(pm.response.responseTime).to.be.below(500);\r
 
       });\r
 
-      \r
-
-      pm.test(\"Returns array of listings\", function () {\r
+      pm.test(\"Returns paged structure with items array\", function () {\r
 
       \    var data = pm.response.json();\r
 
-      \    pm.expect(data).to.be.an(\"array\");\r
+      \    pm.expect(data).to.have.property(\"totalCount\");\r
 
-      \    pm.expect(data.length).to.be.at.most(5);\r
+      \    pm.expect(data).to.have.property(\"items\");\r
 
-      });"
+      \    pm.expect(data.items).to.be.an(\"array\");})"
     language: text/javascript
 order: 6000

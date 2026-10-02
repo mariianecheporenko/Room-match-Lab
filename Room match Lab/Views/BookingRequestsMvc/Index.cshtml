@@ -1,0 +1,35 @@
+@model IEnumerable<RoomMates.Models.BookingRequest>
+@{
+    ViewData["Title"] = "Booking requests";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div><h1 class="h2 mb-1">Booking requests</h1><p class="text-secondary mb-0">Track housing requests and their status.</p></div>
+    <a class="btn btn-primary" asp-action="Create">Create booking request</a>
+</div>
+<div class="card shadow-sm border-0"><div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0">
+        <thead class="table-dark"><tr><th>Profile</th><th>Housing</th><th>Match score</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
+        <tbody>
+        @if (!Model.Any())
+        {
+            <tr><td colspan="6" class="text-center text-secondary py-5">No booking requests yet.</td></tr>
+        }
+        @foreach (var request in Model)
+        {
+            <tr>
+                <td class="fw-semibold">@(request.Profile?.FullName ?? "Profile unavailable")</td>
+                <td>@(request.Housing?.Title ?? "Housing unavailable")</td>
+                <td>@request.MatchScore.ToString("0.##")</td>
+                <td><span class="badge text-bg-secondary">@request.Status</span></td>
+                <td>@request.CreatedAt.ToLocalTime().ToString("d")</td>
+                <td class="text-end text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@request.Id">Details</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@request.Id">Edit</a>
+                    <a class="btn btn-sm btn-outline-danger" asp-action="Delete" asp-route-id="@request.Id">Delete</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div></div>

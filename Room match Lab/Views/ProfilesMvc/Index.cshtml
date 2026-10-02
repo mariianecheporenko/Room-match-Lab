@@ -1,0 +1,32 @@
+@model IEnumerable<RoomMates.Models.Profile>
+@{
+    ViewData["Title"] = "Profiles";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div><h1 class="h2 mb-1">Profiles</h1><p class="text-secondary mb-0">Manage people looking for a room.</p></div>
+    <a class="btn btn-primary" asp-action="Create">Create profile</a>
+</div>
+<div class="card shadow-sm border-0"><div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0">
+        <thead class="table-dark"><tr><th>Name</th><th>Email</th><th>Budget</th><th>Pets</th><th>Smoking</th><th class="text-end">Actions</th></tr></thead>
+        <tbody>
+        @if (!Model.Any())
+        {
+            <tr><td colspan="6" class="text-center text-secondary py-5">No profiles yet. Create the first profile to get started.</td></tr>
+        }
+        @foreach (var profile in Model)
+        {
+            <tr>
+                <td class="fw-semibold">@profile.FullName</td><td>@profile.Email</td><td>@profile.Budget.ToString("C")</td>
+                <td>@(profile.OwnPets ? "Has pets" : profile.PetTolerance.ToString())</td><td>@(profile.IsSmoker ? "Smoker" : "Non-smoker")</td>
+                <td class="text-end text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@profile.Id">Details</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@profile.Id">Edit</a>
+                    <a class="btn btn-sm btn-outline-danger" asp-action="Delete" asp-route-id="@profile.Id">Delete</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div></div>

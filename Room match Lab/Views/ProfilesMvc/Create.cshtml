@@ -1,0 +1,23 @@
+@model RoomMates.Models.Profile
+@{
+    ViewData["Title"] = "Create profile";
+}
+
+<div class="row justify-content-center"><div class="col-lg-8"><div class="card shadow-sm border-0"><div class="card-body p-4">
+    <h1 class="h2">Create profile</h1>
+    <p class="text-secondary">Add the profile details below.</p>
+    <form asp-action="Create" method="post" class="row g-3">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="col-md-6"><label asp-for="FullName" class="form-label"></label><input asp-for="FullName" class="form-control" /><span asp-validation-for="FullName" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="Email" class="form-label"></label><input asp-for="Email" class="form-control" /><span asp-validation-for="Email" class="text-danger"></span></div>
+        <div class="col-md-8"><label asp-for="AvatarUrl" class="form-label"></label><input asp-for="AvatarUrl" class="form-control" /><span asp-validation-for="AvatarUrl" class="text-danger"></span></div>
+        <div class="col-md-4"><label asp-for="Budget" class="form-label"></label><input asp-for="Budget" class="form-control" /><span asp-validation-for="Budget" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="PetTolerance" class="form-label"></label><select asp-for="PetTolerance" asp-items="Html.GetEnumSelectList<RoomMates.Models.PetPolicy>()" class="form-select"></select></div>
+        <div class="col-md-6"><label asp-for="Cleanliness" class="form-label"></label><input asp-for="Cleanliness" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="SleepSchedule" class="form-label"></label><input asp-for="SleepSchedule" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="PartyTolerance" class="form-label"></label><input asp-for="PartyTolerance" class="form-control" /></div>
+        <div class="col-md-6 form-check ms-2"><input asp-for="OwnPets" class="form-check-input" /><label asp-for="OwnPets" class="form-check-label"></label></div>
+        <div class="col-md-6 form-check ms-2"><input asp-for="IsSmoker" class="form-check-input" /><label asp-for="IsSmoker" class="form-check-label"></label></div>
+        <div class="col-12 d-flex gap-2"><button type="submit" class="btn btn-primary">Create profile</button><a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
+    </form>
+</div></div></div></div>

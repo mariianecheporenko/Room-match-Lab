@@ -1,0 +1,36 @@
+@model RoomMates.Models.BookingRequest
+@{
+    ViewData["Title"] = "Create booking request";
+}
+
+<div class="row justify-content-center"><div class="col-lg-8"><div class="card shadow-sm border-0"><div class="card-body p-4">
+    <h1 class="h2">Create booking request</h1>
+    <p class="text-secondary">Choose a profile and housing listing.</p>
+    @if (ViewBag.ProfileId is null || !((IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.ProfileId).Any())
+    {
+        <div class="alert alert-info mb-0">Create a <a asp-controller="ProfilesMVC" asp-action="Create">profile</a> before making a booking request.</div>
+    }
+    else if (ViewBag.HousingId is null || !((IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)ViewBag.HousingId).Any())
+    {
+        <div class="alert alert-info mb-0">Create a <a asp-controller="HousingsMvc" asp-action="Create">housing listing</a> before making a booking request.</div>
+    }
+    else
+    {
+        <form asp-action="Create" method="post" class="row g-3">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-12">
+                <label asp-for="ProfileId" class="form-label">Profile</label>
+                <select asp-for="ProfileId" asp-items="ViewBag.ProfileId" class="form-select"><option value="">Choose a profile</option></select>
+                <span asp-validation-for="ProfileId" class="text-danger"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="HousingId" class="form-label">Housing</label>
+                <select asp-for="HousingId" asp-items="ViewBag.HousingId" class="form-select"><option value="">Choose a housing</option></select>
+                <span asp-validation-for="HousingId" class="text-danger"></span>
+            </div>
+            <div class="col-md-6"><label asp-for="MatchScore" class="form-label"></label><input asp-for="MatchScore" class="form-control" /></div>
+            <div class="col-md-6"><label asp-for="Status" class="form-label"></label><select asp-for="Status" class="form-select"><option>Pending</option><option>Approved</option><option>Declined</option></select></div>
+            <div class="col-12 d-flex gap-2"><button type="submit" class="btn btn-primary">Create request</button><a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
+        </form>
+    }
+</div></div></div></div>

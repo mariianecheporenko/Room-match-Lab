@@ -1,0 +1,137 @@
+@model IEnumerable<RoomMates.Models.Housing>
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>Index</h1>
+
+<p>
+    <a asp-action="Create">Create New</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Title)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.City)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.District)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Street)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.BuildingNumber)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ApartmentNumber)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Latitude)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.Longitude)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.PricePerMonth)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.PetPolicy)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.HasExistingPets)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.AllowsSmoking)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.RequiredCleanliness)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.RequiredSleepSchedule)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.RequiredPartyTolerance)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.CustomRequirements)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.HousingTags)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.BookingRequests)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(model => item.Title)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.City)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.District)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.Street)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.BuildingNumber)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.ApartmentNumber)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.Latitude)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.Longitude)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.PricePerMonth)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.PetPolicy)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.HasExistingPets)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.AllowsSmoking)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.RequiredCleanliness)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.RequiredSleepSchedule)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.RequiredPartyTolerance)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.CustomRequirements)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.HousingTags)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.BookingRequests)
+            </td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
+                <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
+                <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

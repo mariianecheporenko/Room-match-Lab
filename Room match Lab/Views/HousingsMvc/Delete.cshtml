@@ -1,0 +1,41 @@
+@model RoomMates.Models.Housing
+@{
+    ViewData["Title"] = "Delete housing";
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Delete housing - RoomMates</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-semibold" asp-controller="HousingsMvc" asp-action="Index">RoomMates</a>
+        <div class="navbar-nav flex-row gap-3">
+            <a class="nav-link active" asp-controller="HousingsMvc" asp-action="Index">Housings</a>
+            <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Index">Profiles</a>
+            <a class="nav-link" asp-controller="BookingRequestsMVC" asp-action="Index">Bookings</a>
+        </div>
+    </div>
+</nav>
+<main class="container py-5"><div class="row justify-content-center"><div class="col-lg-7">
+    <div class="card border-danger shadow-sm"><div class="card-body p-4">
+        <span class="badge text-bg-danger mb-3">Delete listing</span>
+        <h1 class="h2">Delete this housing?</h1>
+        <p class="text-secondary">This action cannot be undone.</p>
+        <dl class="row">
+            <dt class="col-sm-4">Title</dt><dd class="col-sm-8">@Model.Title</dd>
+            <dt class="col-sm-4">Location</dt><dd class="col-sm-8">@Model.City@(string.IsNullOrWhiteSpace(Model.District) ? "" : $", {Model.District}")</dd>
+            <dt class="col-sm-4">Monthly price</dt><dd class="col-sm-8">@Model.PricePerMonth.ToString("C")</dd>
+        </dl>
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">Delete permanently</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div></div>
+</div></div></main>
+</body>
+</html>
