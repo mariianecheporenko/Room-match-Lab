@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Room_match_Lab.Data;
 using RoomMates.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -49,5 +50,23 @@ app.UseStaticFiles();
 app.UseAuthorization();
 
 app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<RoomMatesDbContext>();
+        // Застосовує всі міграції автоматично при старті
+        context.Database.Migrate();
+        // Наповнює базу готовими записами
+        DbInitializer.Seed(context);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while seeding the database.");
+    }
+}
 
 app.Run();
