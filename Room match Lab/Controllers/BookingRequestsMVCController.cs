@@ -2,16 +2,20 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.SignalR;
+using RoomMates.Hubs;
 using RoomMates.Models;
 using RoomMates.Data;
 
 public class BookingRequestsMVCController : Controller
 {
     private readonly RoomMatesDbContext _context;
+    private readonly IHubContext<BookingHub> _hubContext;
 
-    public BookingRequestsMVCController(RoomMatesDbContext context)
+    public BookingRequestsMVCController(RoomMatesDbContext context, IHubContext<BookingHub> hubContext)
     {
         _context = context;
+        _hubContext = hubContext;
     }
 
     // GET: BOOKINGREQUESTS
@@ -72,10 +76,23 @@ public class BookingRequestsMVCController : Controller
 
         if (ModelState.IsValid)
         {
+            bookingrequest.Profile = await _context.Profiles
+                .SingleAsync(profile => profile.Id == bookingrequest.ProfileId);
+            bookingrequest.Housing = await _context.Housings
+                .SingleAsync(housing => housing.Id == bookingrequest.HousingId);
             bookingrequest.Id = Guid.NewGuid();
             bookingrequest.CreatedAt = DateTime.UtcNow;
             _context.Add(bookingrequest);
             await _context.SaveChangesAsync();
+            await _hubContext.Clients.All.SendAsync(
+                "ReceiveNewBooking",
+                new BookingCreatedEvent(
+                    bookingrequest.Id,
+                    bookingrequest.Housing.Title,
+                    bookingrequest.Profile.FullName,
+                    bookingrequest.MatchScore,
+                    bookingrequest.Status,
+                    bookingrequest.CreatedAt));
             return RedirectToAction(nameof(Index));
         }
         await PopulateCreateOptions(bookingrequest.ProfileId, bookingrequest.HousingId);

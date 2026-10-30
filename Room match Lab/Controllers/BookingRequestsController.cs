@@ -2,8 +2,10 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
+using RoomMates.Hubs;
 using RoomMates.Models;
 using RoomMates.Services;
+using Microsoft.AspNetCore.SignalR;
 
 namespace RoomMates.Controllers;
 
@@ -11,7 +13,8 @@ namespace RoomMates.Controllers;
 [Route("api/[controller]")]
 public sealed class BookingRequestsController(
     RoomMatesDbContext dbContext,
-    ICompatibilityService compatibilityService) : ControllerBase
+    ICompatibilityService compatibilityService,
+    IHubContext<BookingHub> hubContext) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<BookingRequest>>> GetAll(
@@ -89,6 +92,16 @@ public sealed class BookingRequestsController(
 
         dbContext.BookingRequests.Add(request);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await hubContext.Clients.All.SendAsync(
+            "ReceiveNewBooking",
+            new BookingCreatedEvent(
+                request.Id,
+                housing.Title,
+                profile.FullName,
+                request.MatchScore,
+                request.Status,
+                request.CreatedAt),
+            cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = request.Id }, request);
     }

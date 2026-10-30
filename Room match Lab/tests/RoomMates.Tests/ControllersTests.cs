@@ -2,9 +2,11 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using RoomMates.Controllers;
+using RoomMates.Hubs;
 using RoomMates.Models;
 using RoomMates.Services;
 using Moq;
@@ -81,7 +83,7 @@ public class BookingRequestsControllerTests
     {
         using var db = TestDbContextFactory.CreateInMemory();
         var compatibility = new Mock<ICompatibilityService>();
-        var controller = new BookingRequestsController(db, compatibility.Object);
+        var controller = new BookingRequestsController(db, compatibility.Object, new Mock<IHubContext<BookingHub>>().Object);
 
         var result = await controller.Create(
             new CreateBookingRequestDto { ProfileId = Guid.NewGuid(), HousingId = Guid.NewGuid() },
@@ -99,7 +101,7 @@ public class BookingRequestsControllerTests
         db.Profiles.Add(profile);
         await db.SaveChangesAsync();
         var compatibility = new Mock<ICompatibilityService>();
-        var controller = new BookingRequestsController(db, compatibility.Object);
+        var controller = new BookingRequestsController(db, compatibility.Object, new Mock<IHubContext<BookingHub>>().Object);
 
         var result = await controller.Create(
             new CreateBookingRequestDto { ProfileId = profile.Id, HousingId = Guid.NewGuid() },
@@ -119,7 +121,11 @@ public class BookingRequestsControllerTests
         await db.SaveChangesAsync();
         var compatibility = new Mock<ICompatibilityService>();
         compatibility.Setup(x => x.CalculateMatchScore(It.IsAny<Profile>(), It.IsAny<Housing>())).Returns(85.5);
-        var controller = new BookingRequestsController(db, compatibility.Object);
+        var hubClients = new Mock<IHubClients>();
+        hubClients.SetupGet(clients => clients.All).Returns(Mock.Of<IClientProxy>());
+        var hubContext = new Mock<IHubContext<BookingHub>>();
+        hubContext.SetupGet(context => context.Clients).Returns(hubClients.Object);
+        var controller = new BookingRequestsController(db, compatibility.Object, hubContext.Object);
 
         var result = await controller.Create(
             new CreateBookingRequestDto { ProfileId = profile.Id, HousingId = housing.Id },
@@ -150,7 +156,10 @@ public class BookingRequestsControllerTests
         var booking = new BookingRequest { Id = Guid.NewGuid(), Profile = profile, Housing = housing, Status = "Pending" };
         db.BookingRequests.Add(booking);
         await db.SaveChangesAsync();
-        var controller = new BookingRequestsController(db, new Mock<ICompatibilityService>().Object);
+        var controller = new BookingRequestsController(
+            db,
+            new Mock<ICompatibilityService>().Object,
+            new Mock<IHubContext<BookingHub>>().Object);
 
         var result = await controller.UpdateStatus(booking.Id, new UpdateBookingRequestStatusDto { Status = "Accepted" }, CancellationToken.None);
 
@@ -165,7 +174,10 @@ public class BookingRequestsControllerTests
         var booking = NewBooking();
         db.BookingRequests.Add(booking);
         await db.SaveChangesAsync();
-        var controller = new BookingRequestsController(db, new Mock<ICompatibilityService>().Object);
+        var controller = new BookingRequestsController(
+            db,
+            new Mock<ICompatibilityService>().Object,
+            new Mock<IHubContext<BookingHub>>().Object);
 
         var result = await controller.UpdateStatus(booking.Id, new UpdateBookingRequestStatusDto { Status = "UnknownStatus" }, CancellationToken.None);
 

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Room_match_Lab.Data;
 using RoomMates.Data;
+using RoomMates.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ builder.Services.AddControllersWithViews()
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 builder.Services.AddMemoryCache();
+builder.Services.AddSignalR();
 builder.Services.AddDbContext<RoomMatesDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddSingleton<RoomMates.Services.ICompatibilityService,
@@ -72,4 +74,5 @@ app.MapControllerRoute(
     pattern: "{controller=HousingsMvc}/{action=Index}/{id?}");
 
 app.MapControllers();
+app.MapHub<BookingHub>("/bookingHub");
 app.Run();

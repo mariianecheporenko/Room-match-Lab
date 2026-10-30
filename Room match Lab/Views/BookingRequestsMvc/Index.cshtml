@@ -10,10 +10,10 @@
 <div class="card shadow-sm border-0"><div class="table-responsive">
     <table class="table table-striped table-hover align-middle mb-0">
         <thead class="table-dark"><tr><th>Profile</th><th>Housing</th><th>Match score</th><th>Status</th><th>Created</th><th class="text-end">Actions</th></tr></thead>
-        <tbody>
+        <tbody id="booking-requests-table-body">
         @if (!Model.Any())
         {
-            <tr><td colspan="6" class="text-center text-secondary py-5">No booking requests yet.</td></tr>
+            <tr data-empty-state="true"><td colspan="6" class="text-center text-secondary py-5">No booking requests yet.</td></tr>
         }
         @foreach (var request in Model)
         {
@@ -33,3 +33,82 @@
         </tbody>
     </table>
 </div></div>
+
+<style>
+    .flash-green {
+        animation: flash-green-fade 2s ease-out forwards;
+    }
+
+    .flash-green > * {
+        animation: flash-green-fade 2s ease-out forwards;
+    }
+
+    @@keyframes flash-green-fade {
+        from { background-color: #75e58b; }
+        to { background-color: #fff; }
+    }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<script>
+    (() => {
+        const tableBody = document.getElementById("booking-requests-table-body");
+        if (!tableBody || !window.signalR) return;
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/bookingHub")
+            .withAutomaticReconnect()
+            .build();
+
+        const cell = (value, className) => {
+            const element = document.createElement("td");
+            if (className) element.className = className;
+            element.textContent = value ?? "";
+            return element;
+        };
+
+        connection.on("ReceiveNewBooking", booking => {
+            tableBody.querySelector("[data-empty-state='true']")?.remove();
+
+            const row = document.createElement("tr");
+            row.classList.add("flash-green");
+            row.append(
+                cell(booking.profileName, "fw-semibold"),
+                cell(booking.housingTitle),
+                cell(Number(booking.matchScore).toLocaleString(undefined, { maximumFractionDigits: 2 })),
+            );
+
+            const statusCell = document.createElement("td");
+            const badge = document.createElement("span");
+            badge.className = "badge text-bg-secondary";
+            badge.textContent = booking.status ?? "";
+            statusCell.append(badge);
+            row.append(statusCell);
+
+            const createdAt = booking.createdAt ? new Date(booking.createdAt) : new Date();
+            row.append(cell(createdAt.toLocaleDateString()));
+
+            const actions = document.createElement("td");
+            actions.className = "text-end text-nowrap";
+            [
+                ["Details", "btn-outline-primary"],
+                ["Edit", "btn-outline-secondary"],
+                ["Delete", "btn-outline-danger"]
+            ].forEach(([label, style]) => {
+                const link = document.createElement("a");
+                link.className = `btn btn-sm ${style} ms-1`;
+                link.href = `/BookingRequestsMvc/${label}/${encodeURIComponent(booking.id)}`;
+                link.textContent = label;
+                actions.append(link);
+            });
+            row.append(actions);
+            tableBody.prepend(row);
+        });
+
+        const startConnection = () => connection.start().catch(error => {
+            console.error("SignalR connection failed; retrying in five seconds.", error);
+            window.setTimeout(startConnection, 5000);
+        });
+        startConnection();
+    })();
+</script>

@@ -1,0 +1,11 @@
+# Connectivity Analysis: WebSockets, Long Polling, and Server-Sent Events
+
+Real-time transport affects server resources, network traffic, and implementation overhead. These three approaches all deliver updates to connected clients, but keep connections and exchange data differently.
+
+**WebSockets** provide one persistent, full-duplex connection. After the HTTP upgrade handshake, either side can send messages at any time without opening another request. Frequent updates therefore have low latency and little per-message overhead: HTTP headers are not repeated for every message. The cost is a long-lived connection per client, using server memory and connection resources even while idle. Applications and infrastructure must also account for heartbeats, reconnects, proxies, load balancing, and scaling. SignalR prefers WebSockets when available and manages much of this lifecycle in ASP.NET Core.
+
+**Long polling** uses ordinary HTTP. The client sends a request that the server holds until data arrives or a timeout occurs; the client then immediately starts another request. This works across restrictive networks without a protocol upgrade, but each cycle adds HTTP headers, request parsing, scheduling, and latency. Waiting requests consume server resources while idle. Short timeouts can also create repeated empty responses, increasing network load. Long polling is most useful as a compatibility fallback when persistent transports are unavailable.
+
+**Server-Sent Events (SSE)** stream events from server to browser over one long-lived HTTP response. This is simpler than WebSockets for one-way notifications: it uses standard HTTP, reconnects automatically in browsers, and has lightweight event framing. The open connection still consumes resources per client. Traffic only flows from server to client, so browser actions require separate HTTP requests. SSE fits dashboards and feeds where clients only receive changes.
+
+WebSockets fit frequent two-way interaction; SSE fits lightweight server-to-browser updates; long polling offers broad compatibility with higher per-update overhead. For booking notifications, SignalR provides a WebSocket-first API with fallback support, though resource use still grows with concurrent clients.
