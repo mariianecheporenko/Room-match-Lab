@@ -115,6 +115,7 @@ public class BookingRequestsControllerTests
             db,
             new Mock<ICompatibilityService>().Object,
             new Mock<IHubContext<BookingHub>>().Object);
+        Authenticate(controller, Guid.NewGuid(), "KNU");
 
         var result = await controller.UpdateStatus(booking.Id, new UpdateBookingRequestStatusDto { Status = "Accepted" }, CancellationToken.None);
 
@@ -153,14 +154,15 @@ public class BookingRequestsControllerTests
 
     private static Housing ValidHousing() => new()
     {
-        Id = Guid.NewGuid(), Title = "Sunny apartment", City = "Kyiv", Street = "Main Street",
+        Id = Guid.NewGuid(), Title = "Sunny apartment", TenantId = "KNU", City = "Kyiv", Street = "Main Street",
         BuildingNumber = "10", PricePerMonth = 800
     };
 
-    private static void Authenticate(BookingRequestsController controller, Guid profileId)
+    private static void Authenticate(BookingRequestsController controller, Guid profileId, string? tenantId = null)
     {
-        var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, profileId.ToString())], "Test");
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, profileId.ToString()) };
+        if (tenantId is not null) claims.Add(new Claim("TenantId", tenantId));
+        var identity = new ClaimsIdentity(claims, "Test");
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
@@ -236,16 +238,19 @@ public class HousingsControllerTests
     public async Task CreateAndDelete_InvalidateHousingPageCache()
     {
         using var db = TestDbContextFactory.CreateInMemory();
+        var landlord = ValidLandlord();
         var originalHousing = MakeHousing("Housing 1");
-        db.Housings.Add(originalHousing);
+        db.AddRange(landlord, originalHousing);
         await db.SaveChangesAsync();
         using var cache = new MemoryCache(new MemoryCacheOptions());
-        var controller = CreateController(db, cache);
+        var controller = CreateController(db, cache, landlord.Id);
 
         (await ReadPage(controller)).TotalCount.Should().Be(1);
         var newHousing = MakeHousing("Housing 2");
+        newHousing.LandlordId = Guid.NewGuid(); // Simulate a forged owner supplied by the client.
         var createResult = await controller.Create(newHousing, CancellationToken.None);
         createResult.Result.Should().BeOfType<CreatedAtActionResult>();
+        newHousing.LandlordId.Should().Be(landlord.Id);
         (await ReadPage(controller)).TotalCount.Should().Be(2);
 
         var deleteResult = await controller.Delete(newHousing.Id, CancellationToken.None);
@@ -253,16 +258,40 @@ public class HousingsControllerTests
         (await ReadPage(controller)).TotalCount.Should().Be(1);
     }
 
-    private static HousingsController CreateController(RoomMates.Data.RoomMatesDbContext db, IMemoryCache cache)
+    [Fact]
+    public async Task Create_WithoutMatchingAuthenticatedProfile_ReturnsForbid()
     {
+        using var db = TestDbContextFactory.CreateInMemory();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var controller = CreateController(db, cache, Guid.NewGuid());
+
+        var result = await controller.Create(MakeHousing("Housing without profile"), CancellationToken.None);
+
+        result.Result.Should().BeOfType<ForbidResult>();
+        db.Housings.Should().BeEmpty();
+    }
+
+    private static Profile ValidLandlord() => new()
+    {
+        Id = Guid.NewGuid(), FullName = "Landlord Example", Email = $"{Guid.NewGuid():N}@example.com",
+        AvatarUrl = "https://example.com/landlord.png", TenantId = "KNU"
+    };
+
+    private static HousingsController CreateController(
+        RoomMates.Data.RoomMatesDbContext db,
+        IMemoryCache cache,
+        Guid? profileId = null)
+    {
+        var claims = new List<Claim> { new("TenantId", "KNU") };
+        if (profileId.HasValue)
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, profileId.Value.ToString()));
         var controller = new HousingsController(db, cache)
         {
             ControllerContext = new ControllerContext
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity(
-                        [new Claim("TenantId", "KNU")], "Test"))
+                    User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"))
                 }
             }
         };

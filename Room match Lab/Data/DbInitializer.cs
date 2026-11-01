@@ -11,7 +11,8 @@ public static class DbInitializer
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        context.Database.Migrate();
+        if (context.Database.IsRelational())
+            context.Database.Migrate();
 
         var tags = SeedTags(context);
         var criteria = SeedCriteria(context);
