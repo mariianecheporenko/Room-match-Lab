@@ -1,23 +1,154 @@
-@model RoomMates.Models.Profile
+@inject IConfiguration Configuration
 @{
-    ViewData["Title"] = "Create profile";
+    ViewData["Title"] = "Sign in";
+    var googleClientId = Configuration["Authentication:Google:ClientId"]
+        ?? Configuration["Google:ClientId"]
+        ?? string.Empty;
 }
 
-<div class="row justify-content-center"><div class="col-lg-8"><div class="card shadow-sm border-0"><div class="card-body p-4">
-    <h1 class="h2">Create profile</h1>
-    <p class="text-secondary">Add the profile details below.</p>
-    <form asp-action="Create" method="post" class="row g-3">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        <div class="col-md-6"><label asp-for="FullName" class="form-label"></label><input asp-for="FullName" class="form-control" /><span asp-validation-for="FullName" class="text-danger"></span></div>
-        <div class="col-md-6"><label asp-for="Email" class="form-label"></label><input asp-for="Email" class="form-control" /><span asp-validation-for="Email" class="text-danger"></span></div>
-        <div class="col-md-8"><label asp-for="AvatarUrl" class="form-label"></label><input asp-for="AvatarUrl" class="form-control" /><span asp-validation-for="AvatarUrl" class="text-danger"></span></div>
-        <div class="col-md-4"><label asp-for="Budget" class="form-label"></label><input asp-for="Budget" class="form-control" /><span asp-validation-for="Budget" class="text-danger"></span></div>
-        <div class="col-md-6"><label asp-for="PetTolerance" class="form-label"></label><select asp-for="PetTolerance" asp-items="Html.GetEnumSelectList<RoomMates.Models.PetPolicy>()" class="form-select"></select></div>
-        <div class="col-md-6"><label asp-for="Cleanliness" class="form-label"></label><input asp-for="Cleanliness" class="form-control" /></div>
-        <div class="col-md-6"><label asp-for="SleepSchedule" class="form-label"></label><input asp-for="SleepSchedule" class="form-control" /></div>
-        <div class="col-md-6"><label asp-for="PartyTolerance" class="form-label"></label><input asp-for="PartyTolerance" class="form-control" /></div>
-        <div class="col-md-6 form-check ms-2"><input asp-for="OwnPets" class="form-check-input" /><label asp-for="OwnPets" class="form-check-label"></label></div>
-        <div class="col-md-6 form-check ms-2"><input asp-for="IsSmoker" class="form-check-input" /><label asp-for="IsSmoker" class="form-check-label"></label></div>
-        <div class="col-12 d-flex gap-2"><button type="submit" class="btn btn-primary">Create profile</button><a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
-    </form>
-</div></div></div></div>
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4 text-center">
+                <h1 class="h2">Sign in to RoomMates</h1>
+                <p class="text-secondary">Use your Google account to continue.</p>
+                <div id="g_id_onload"
+                     data-client_id="@googleClientId"
+                     data-context="signin"
+                     data-ux_mode="popup"
+                     data-callback="handleGoogleCredential"
+                     data-auto_prompt="false"></div>
+                <div class="d-flex justify-content-center">
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-size="large"
+                         data-theme="outline"
+                         data-text="continue_with"
+                         data-shape="rectangular"
+                         data-logo_alignment="left"></div>
+                </div>
+                <div id="googleSignInStatus" class="small mt-3" role="status" aria-live="polite"></div>
+                <hr class="my-4" />
+                <h2 class="h5 text-start">Or sign in with email and password</h2>
+                <form id="passwordLoginForm" class="text-start">
+                    <div class="mb-3">
+                        <label for="loginEmail" class="form-label">Email</label>
+                        <input id="loginEmail" name="email" type="email" class="form-control" autocomplete="email" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="loginPassword" class="form-label">Password</label>
+                        <input id="loginPassword" name="password" type="password" class="form-control" autocomplete="current-password" required minlength="8" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Sign in</button>
+                </form>
+                <div id="passwordAuthStatus" class="small mt-3" role="status" aria-live="polite"></div>
+                <details class="text-start mt-4">
+                    <summary class="fw-semibold">Create an account with email and password</summary>
+                    <form id="passwordRegisterForm" class="mt-3">
+                        <div class="mb-3">
+                            <label for="registerFullName" class="form-label">Full name</label>
+                            <input id="registerFullName" name="fullName" type="text" class="form-control" autocomplete="name" maxlength="200" required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerEmail" class="form-label">Email</label>
+                            <input id="registerEmail" name="email" type="email" class="form-control" autocomplete="email" maxlength="320" required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerPassword" class="form-label">Password (at least 8 characters)</label>
+                            <input id="registerPassword" name="password" type="password" class="form-control" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary w-100">Create account</button>
+                    </form>
+                </details>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        const passwordAuthStatus = document.getElementById("passwordAuthStatus");
+
+        async function completeSignIn(result) {
+            if (!result.ok) {
+                passwordAuthStatus.textContent = result.status === 401
+                    ? "Invalid email or password."
+                    : "Sign-in failed. Check the details and try again.";
+                return false;
+            }
+
+            const auth = await result.json();
+            window.RoomMatesAuth.setToken(auth.token);
+            window.location.assign("/");
+            return true;
+        }
+
+        document.getElementById("passwordLoginForm").addEventListener("submit", async event => {
+            event.preventDefault();
+            passwordAuthStatus.textContent = "Signing in…";
+            const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+            try {
+                await completeSignIn(await fetch("/api/auth/login", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(values)
+                }));
+            } catch {
+                passwordAuthStatus.textContent = "Could not reach the sign-in service. Please try again.";
+            }
+        });
+
+        document.getElementById("passwordRegisterForm").addEventListener("submit", async event => {
+            event.preventDefault();
+            passwordAuthStatus.textContent = "Creating your account…";
+            const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+            try {
+                const result = await fetch("/api/auth/register", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(values)
+                });
+                if (!result.ok) {
+                    passwordAuthStatus.textContent = result.status === 409
+                        ? "An account already exists for this email. Sign in with its existing provider."
+                        : "Registration failed. Check your details and try again.";
+                    return;
+                }
+                await completeSignIn(result);
+            } catch {
+                passwordAuthStatus.textContent = "Could not reach the registration service. Please try again.";
+            }
+        });
+
+        async function handleGoogleCredential(response) {
+            const status = document.getElementById("googleSignInStatus");
+            status.textContent = "Signing in with Google…";
+
+            try {
+                const result = await fetch("/api/auth/google", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ credential: response.credential })
+                });
+
+                if (!result.ok) {
+                    status.textContent = result.status === 401
+                        ? "Google sign-in was not accepted. Please try again."
+                        : "Google sign-in failed. Please try again.";
+                    return;
+                }
+
+                const auth = await result.json();
+                window.RoomMatesAuth.setToken(auth.token);
+                status.textContent = "Signed in successfully.";
+                window.location.assign("/");
+            } catch {
+                status.textContent = "Could not reach the sign-in service. Please try again.";
+            }
+        }
+    </script>
+}

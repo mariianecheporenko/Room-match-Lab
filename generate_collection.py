@@ -117,7 +117,28 @@ requests_data = [
         'method': 'DELETE',
         'url': '{{baseUrl}}/api/Housings/{{housingId}}',
         'scripts': [{'type': 'afterResponse', 'code': 'pm.test("Status is 200 or 204 (Deleted)", function () {\n    pm.expect(pm.response.code).to.be.oneOf([200, 204]);\n});'}]
-    }
+    },
+    {
+        'name': '0. Login & Get JWT Token',
+        'order': 500,
+        'method': 'POST',
+        'url': '{{baseUrl}}/api/auth/login',
+        'body': {
+            'type': 'json',
+            'content': '{\n  "email": "student.knu@knu.ua"\n}'
+        },
+        'scripts': [{
+            'type': 'afterResponse',
+            'code': '''pm.test("Status is 200 OK", function () {
+    pm.expect(pm.response.code).to.eql(200);
+});
+pm.test("Token received and stored", function () {
+    var data = pm.response.json();
+    pm.expect(data.token).to.not.be.empty;
+    pm.collectionVariables.set("jwtToken", data.token);
+});'''
+        }]
+    },
 ]
 
 requests_data.sort(key=lambda r: r['order'])

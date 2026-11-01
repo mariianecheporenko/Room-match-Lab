@@ -1,9 +1,12 @@
 
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Models;
 using RoomMates.Data;
 
+[Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
 public class ProfilesMVCController : Controller
 {
     private readonly RoomMatesDbContext _context;
@@ -38,26 +41,15 @@ public class ProfilesMVCController : Controller
     }
 
     // GET: PROFILES/Create
+    [AllowAnonymous]
     public IActionResult Create()
     {
         return View();
     }
 
-    // POST: PROFILES/Create
-    // To protect from overposting attacks, enable the specific properties you want to bind to.
-    // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("FullName,Email,AvatarUrl,Budget,PetTolerance,OwnPets,IsSmoker,Cleanliness,SleepSchedule,PartyTolerance")] Profile profile)
+    public IActionResult Password()
     {
-        if (ModelState.IsValid)
-        {
-            profile.Id = Guid.NewGuid();
-            _context.Add(profile);
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
-        }
-        return View(profile);
+        return View();
     }
 
     // GET: PROFILES/Edit/5
@@ -92,6 +84,17 @@ public class ProfilesMVCController : Controller
         {
             try
             {
+                var existing = await _context.Profiles
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(existingProfile => existingProfile.Id == profile.Id);
+                if (existing is null)
+                {
+                    return NotFound();
+                }
+
+                profile.TenantId = existing.TenantId;
+                profile.EnableDetailedAnalytics = existing.EnableDetailedAnalytics;
+                profile.IsCrossUniversity = existing.IsCrossUniversity;
                 _context.Update(profile);
                 await _context.SaveChangesAsync();
             }

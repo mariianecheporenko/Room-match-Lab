@@ -7,6 +7,7 @@ public class Housing
     public Guid Id { get; set; }
 
     [Required, StringLength(200)] public string Title { get; set; } = string.Empty;
+    [StringLength(100)] public string? TenantId { get; set; }
     [Required, StringLength(120)] public string City { get; set; } = string.Empty;
     [StringLength(120)] public string? District { get; set; }
     [Required, StringLength(200)] public string Street { get; set; } = string.Empty;

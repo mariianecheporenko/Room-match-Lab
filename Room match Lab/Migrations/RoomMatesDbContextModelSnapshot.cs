@@ -118,6 +118,10 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.HasKey("Id");
 
                     b.ToTable("Housings", t =>
@@ -223,6 +227,16 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("EnableDetailedAnalytics")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsCrossUniversity")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -243,6 +257,10 @@ namespace Room_match_Lab.Migrations
 
                     b.Property<int>("SleepSchedule")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
 

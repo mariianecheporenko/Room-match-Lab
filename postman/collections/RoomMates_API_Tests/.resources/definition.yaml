@@ -3,3 +3,4 @@ variables:
   baseUrl: ""
   profileId: ""
   housingId: ""
+  jwtToken: ""

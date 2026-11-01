@@ -14,6 +14,9 @@
             <a class="nav-link" asp-controller="HousingsMvc" asp-action="Index">Housings</a>
             <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Index">Profiles</a>
             <a class="nav-link" asp-controller="BookingRequestsMVC" asp-action="Index">Bookings</a>
+            <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Password">Account</a>
+            <a class="nav-link" id="authLoginLink" href="/ProfilesMVC/Create">Sign in with Google</a>
+            <button class="btn btn-sm btn-outline-light my-1" id="authLogoutButton" type="button" hidden>Sign out</button>
         </div>
     </div>
 </nav>
@@ -21,6 +24,7 @@
     @RenderBody()
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/roommates-auth.js"></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

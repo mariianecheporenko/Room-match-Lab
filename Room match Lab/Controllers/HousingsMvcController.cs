@@ -1,20 +1,26 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
 using RoomMates.Models;
 
+[Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
 public class HousingsMvcController(RoomMatesDbContext context) : Controller
 {
     private readonly RoomMatesDbContext _context = context;
 
     public async Task<IActionResult> Index()
     {
-        return View(await _context.Housings.AsNoTracking().ToListAsync());
+        return View(await VisibleHousings()
+            .OrderBy(housing => housing.Title)
+            .ToListAsync());
     }
 
     public async Task<IActionResult> Details(Guid id)
     {
-        var housing = await _context.Housings.AsNoTracking()
+        var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
 
         return housing is null ? NotFound() : View(housing);
@@ -23,7 +29,8 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     [HttpGet]
     public async Task<IActionResult> Edit(Guid id)
     {
-        var housing = await _context.Housings.FindAsync(id);
+        var housing = await VisibleHousings()
+            .FirstOrDefaultAsync(item => item.Id == id);
         return housing is null ? NotFound() : View(housing);
     }
 
@@ -41,7 +48,8 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             return View(input);
         }
 
-        var housing = await _context.Housings.FindAsync(id);
+        var housing = await VisibleHousings(asNoTracking: false)
+            .FirstOrDefaultAsync(item => item.Id == id);
         if (housing is null)
         {
             return NotFound();
@@ -70,7 +78,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     [HttpGet]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var housing = await _context.Housings.AsNoTracking()
+        var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
         return housing is null ? NotFound() : View(housing);
     }
@@ -89,6 +97,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         }
 
         housing.Id = Guid.NewGuid();
+        housing.TenantId = User.FindFirstValue("TenantId");
         _context.Housings.Add(housing);
         await _context.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
@@ -99,7 +108,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(Guid id)
     {
-        var housing = await _context.Housings.FindAsync(id);
+        var housing = await VisibleHousings().FirstOrDefaultAsync(item => item.Id == id);
         if (housing is not null)
         {
             _context.Housings.Remove(housing);
@@ -107,5 +116,21 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    private IQueryable<Housing> VisibleHousings(bool asNoTracking = true)
+    {
+        IQueryable<Housing> housings = _context.Housings;
+        if (asNoTracking)
+            housings = housings.AsNoTracking();
+        var tenantId = User.FindFirstValue("TenantId");
+        var isCrossUniversity = bool.TryParse(
+            User.FindFirstValue("IsCrossUniversity"),
+            out var parsedCrossUniversity) && parsedCrossUniversity;
+
+        if (!isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
+            housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
+
+        return housings;
     }
 }

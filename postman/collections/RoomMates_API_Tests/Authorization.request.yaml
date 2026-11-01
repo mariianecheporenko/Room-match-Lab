@@ -1,0 +1,29 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/login"
+method: POST
+body:
+  type: json
+  content: '{"email": "student.knu@knu.ua"}'
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 200 OK\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Token generated and saved\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    pm.expect(data.token).to.not.be.empty;\r
+
+      \r
+
+      \    pm.collectionVariables.set(\"jwtToken\", data.token);\r
+
+      });"
+    language: text/javascript
+order: 2260841347736401

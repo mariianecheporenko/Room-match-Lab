@@ -1,0 +1,36 @@
+$kind: http-request
+url: "{{baseUrl}}/api/Housings"
+method: GET
+headers:
+  Authorization: Bearer {{jwtToken}}
+auth:
+  type: bearer
+  credentials:
+    token: "{{jwtToken}}"
+scripts:
+  - type: afterResponse
+    code: "pm.test(\"Status is 200 OK for authorized request\", function () {\r
+
+      \    pm.expect(pm.response.code).to.eql(200);\r
+
+      });\r
+
+      \r
+
+      pm.test(\"Multi-tenancy isolation: Returns KNU or General housings only\", function () {\r
+
+      \    var data = pm.response.json();\r
+
+      \    var items = data.items || data;\r
+
+      \    items.forEach(function(housing) {\r
+
+      \        var isValidTenant = (housing.tenantId === \"KNU\" || housing.tenantId === null);\r
+
+      \        pm.expect(isValidTenant).to.be.true;\r
+
+      \    });\r
+
+      });"
+    language: text/javascript
+order: 3211079731276846

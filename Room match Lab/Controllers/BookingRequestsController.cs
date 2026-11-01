@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
@@ -10,6 +12,7 @@ using Microsoft.AspNetCore.SignalR;
 namespace RoomMates.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public sealed class BookingRequestsController(
     RoomMatesDbContext dbContext,
@@ -59,7 +62,7 @@ public sealed class BookingRequestsController(
     }
 
     [HttpPost]
-    public async Task<ActionResult<BookingRequest>> Create(
+    public async Task<ActionResult<MatchResultDto>> Create(
         CreateBookingRequestDto body,
         CancellationToken cancellationToken)
     {
@@ -103,7 +106,17 @@ public sealed class BookingRequestsController(
                 request.CreatedAt),
             cancellationToken);
 
-        return CreatedAtAction(nameof(GetById), new { id = request.Id }, request);
+        var enableDetailedAnalytics = bool.TryParse(
+            User?.FindFirstValue("EnableDetailedAnalytics"), out var analyticsClaim) && analyticsClaim;
+        var matchResult = new MatchResultDto
+        {
+            MatchScore = request.MatchScore,
+            DetailedStats = enableDetailedAnalytics
+                ? ["Cleanliness: +5%", "Tag Synergy: +4%"]
+                : null
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = request.Id }, matchResult);
     }
 
     [HttpPut("{id:guid}/status")]

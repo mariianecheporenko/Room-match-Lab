@@ -1,15 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using RoomMates.Data;
 using RoomMates.Models;
-using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 
 namespace RoomMates.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache) : ControllerBase
 {
@@ -24,12 +26,19 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     {
         skip = Math.Max(0, skip);
         limit = Math.Clamp(limit, 1, 100);
-        var cacheKey = $"housings_skip_{skip}_limit_{limit}";
+        var tenantId = User.FindFirstValue("TenantId");
+        var isCrossUniversity = bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
+            && crossUniversityClaim;
+        var tenantScope = isCrossUniversity || string.IsNullOrWhiteSpace(tenantId)
+            ? "all"
+            : $"tenant_{tenantId}";
+        var cacheKey = $"housings_{tenantScope}_skip_{skip}_limit_{limit}";
         if (cache.TryGetValue(cacheKey, out PagedResult<Housing>? cachedPage))
             return Ok(cachedPage);
 
-        var totalCount = await dbContext.Housings.CountAsync(cancellationToken);
-        var housings = await dbContext.Housings.AsNoTracking()
+        var visibleHousings = GetVisibleHousings(tenantId, isCrossUniversity);
+        var totalCount = await visibleHousings.CountAsync(cancellationToken);
+        var housings = await visibleHousings.AsNoTracking()
             .Include(x => x.CustomRequirements).ThenInclude(x => x.LifestyleCriterion)
             .Include(x => x.HousingTags).ThenInclude(x => x.Tag)
             .OrderBy(x => x.Title)
@@ -76,7 +85,11 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Housing>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var housing = await dbContext.Housings.AsNoTracking()
+        var tenantId = User.FindFirstValue("TenantId");
+        var isCrossUniversity = bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
+            && crossUniversityClaim;
+
+        var housing = await GetVisibleHousings(tenantId, isCrossUniversity).AsNoTracking()
             .Include(x => x.CustomRequirements).ThenInclude(x => x.LifestyleCriterion)
             .Include(x => x.HousingTags).ThenInclude(x => x.Tag)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -86,7 +99,10 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     [HttpPost]
     public async Task<ActionResult<Housing>> Create(Housing housing, CancellationToken cancellationToken)
     {
+        var tenantId = User.FindFirstValue("TenantId");
+
         housing.Id = Guid.NewGuid();
+        housing.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
         dbContext.Housings.Add(housing);
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateHousingPages();
@@ -96,8 +112,11 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, Housing housing, CancellationToken cancellationToken)
     {
+        var tenantId = User.FindFirstValue("TenantId");
         if (id != housing.Id) return BadRequest("Route id must match the housing id.");
-        if (!await dbContext.Housings.AnyAsync(x => x.Id == id, cancellationToken)) return NotFound();
+        if (!await dbContext.Housings.AnyAsync(
+                x => x.Id == id && x.TenantId == tenantId, cancellationToken)) return NotFound();
+        housing.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
         dbContext.Entry(housing).State = EntityState.Modified;
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateHousingPages();
@@ -107,7 +126,9 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var housing = await dbContext.Housings.FindAsync([id], cancellationToken);
+        var tenantId = User.FindFirstValue("TenantId");
+        var housing = await dbContext.Housings
+            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, cancellationToken);
         if (housing is null) return NotFound();
         dbContext.Housings.Remove(housing);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -124,5 +145,14 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
                 cache.Remove(key);
             cacheKeys.Clear();
         }
+    }
+
+    private IQueryable<Housing> GetVisibleHousings(string? tenantId, bool isCrossUniversity)
+    {
+        var housings = dbContext.Housings.AsQueryable();
+        if (!isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
+            housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
+
+        return housings;
     }
 }

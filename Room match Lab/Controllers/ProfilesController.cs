@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
@@ -7,6 +8,7 @@ using RoomMates.Models;
 namespace RoomMates.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public sealed class ProfilesController(RoomMatesDbContext dbContext) : ControllerBase
 {
@@ -59,6 +61,9 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
             Id = Guid.NewGuid(),
             FullName = request.FullName.Trim(),
             Email = request.Email.Trim(),
+            TenantId = request.TenantId?.Trim(),
+            EnableDetailedAnalytics = request.EnableDetailedAnalytics,
+            IsCrossUniversity = request.IsCrossUniversity,
             AvatarUrl = request.AvatarUrl.Trim(),
             Budget = request.Budget,
             PetTolerance = request.PetTolerance,
@@ -104,6 +109,9 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
 
         profile.FullName = request.FullName.Trim();
         profile.Email = request.Email.Trim();
+        profile.TenantId = request.TenantId?.Trim();
+        profile.EnableDetailedAnalytics = request.EnableDetailedAnalytics;
+        profile.IsCrossUniversity = request.IsCrossUniversity;
         profile.AvatarUrl = request.AvatarUrl.Trim();
         profile.Budget = request.Budget;
         profile.PetTolerance = request.PetTolerance;
@@ -241,6 +249,9 @@ public sealed class ProfileUpsertRequest
 {
     [Required, StringLength(200)] public string FullName { get; init; } = string.Empty;
     [Required, EmailAddress, StringLength(320)] public string Email { get; init; } = string.Empty;
+    [StringLength(100)] public string? TenantId { get; init; }
+    public bool EnableDetailedAnalytics { get; init; } = false;
+    public bool IsCrossUniversity { get; init; } = false;
     [Required, Url, StringLength(2048)] public string AvatarUrl { get; init; } = string.Empty;
     public decimal Budget { get; init; }
     public PetPolicy PetTolerance { get; init; } = PetPolicy.Allowed;

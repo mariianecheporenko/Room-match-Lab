@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
 using RoomMates.Models;
@@ -7,6 +8,7 @@ using RoomMates.Services;
 namespace RoomMates.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class LifestyleCriteriaController(RoomMatesDbContext dbContext, IFuzzyMatchingService fuzzyMatching) : ControllerBase
 {

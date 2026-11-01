@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -132,17 +133,16 @@ public class BookingRequestsControllerTests
             CancellationToken.None);
 
         var created = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
-        var booking = created.Value.Should().BeOfType<BookingRequest>().Subject;
-        booking.Status.Should().Be("Pending");
-        booking.MatchScore.Should().Be(85.5);
-        booking.ProfileId.Should().Be(profile.Id);
-        booking.HousingId.Should().Be(housing.Id);
+        var match = created.Value.Should().BeOfType<MatchResultDto>().Subject;
+        match.MatchScore.Should().Be(85.5);
+        match.DetailedStats.Should().BeNull();
         compatibility.Verify(
             x => x.CalculateMatchScore(
                 It.Is<Profile>(p => p.Id == profile.Id), It.Is<Housing>(h => h.Id == housing.Id)),
             Times.Once);
         var persisted = await db.BookingRequests.SingleAsync();
-        persisted.Id.Should().Be(booking.Id);
+        persisted.ProfileId.Should().Be(profile.Id);
+        persisted.HousingId.Should().Be(housing.Id);
         persisted.Status.Should().Be("Pending");
         persisted.MatchScore.Should().Be(85.5);
     }
@@ -211,7 +211,7 @@ public class HousingsControllerTests
         using var db = TestDbContextFactory.CreateInMemory();
         var housings = Enumerable.Range(1, 5).Select(index => new Housing
         {
-            Id = Guid.NewGuid(), Title = $"Housing {index}", City = "Kyiv", Street = $"Street {index}",
+            Id = Guid.NewGuid(), Title = $"Housing {index}", TenantId = "KNU", City = "Kyiv", Street = $"Street {index}",
             BuildingNumber = index.ToString(), PricePerMonth = 500 + index
         }).ToList();
         db.Housings.AddRange(housings);
@@ -292,7 +292,14 @@ public class HousingsControllerTests
     {
         var controller = new HousingsController(db, cache)
         {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim("TenantId", "KNU")], "Test"))
+                }
+            }
         };
         controller.Request.Scheme = "https";
         controller.Request.Host = new HostString("roommates.example");
@@ -309,7 +316,7 @@ public class HousingsControllerTests
 
     private static Housing MakeHousing(string title) => new()
     {
-        Id = Guid.NewGuid(), Title = title, City = "Kyiv", Street = "Street 1",
+        Id = Guid.NewGuid(), Title = title, TenantId = "KNU", City = "Kyiv", Street = "Street 1",
         BuildingNumber = "1", PricePerMonth = 500
     };
 }

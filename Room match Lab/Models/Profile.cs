@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace RoomMates.Models;
 
@@ -11,6 +12,15 @@ public class Profile
 
     [Required, EmailAddress, StringLength(320)]
     public string Email { get; set; } = string.Empty;
+
+    [JsonIgnore, StringLength(512)]
+    public string? PasswordHash { get; set; }
+
+    [StringLength(100)]
+    public string? TenantId { get; set; }
+
+    public bool EnableDetailedAnalytics { get; set; } = false;
+    public bool IsCrossUniversity { get; set; } = false;
 
     [Required, Url, StringLength(2048)]
     public string AvatarUrl { get; set; } = string.Empty;

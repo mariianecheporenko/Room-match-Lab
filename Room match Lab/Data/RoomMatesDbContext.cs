@@ -18,6 +18,8 @@ public class RoomMatesDbContext(DbContextOptions<RoomMatesDbContext> options) : 
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => x.Email).IsUnique();
             entity.Property(x => x.Budget).HasPrecision(12, 2);
+            entity.Property(x => x.PasswordHash).HasMaxLength(512);
+            entity.Property(x => x.TenantId).HasMaxLength(100);
             entity.Property(x => x.PetTolerance).HasConversion<string>();
             entity.ToTable(t => t.HasCheckConstraint("CK_Profiles_Cleanliness", "\"Cleanliness\" BETWEEN 1 AND 5"));
             entity.ToTable(t => t.HasCheckConstraint("CK_Profiles_SleepSchedule", "\"SleepSchedule\" BETWEEN 1 AND 5"));
@@ -27,6 +29,7 @@ public class RoomMatesDbContext(DbContextOptions<RoomMatesDbContext> options) : 
         modelBuilder.Entity<Housing>(entity =>
         {
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.TenantId).HasMaxLength(100);
             entity.Property(x => x.PricePerMonth).HasPrecision(12, 2);
             entity.Property(x => x.PetPolicy).HasConversion<string>();
             entity.ToTable(t => t.HasCheckConstraint("CK_Housings_RequiredCleanliness", "\"RequiredCleanliness\" BETWEEN 1 AND 5"));
