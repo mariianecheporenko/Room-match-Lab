@@ -39,4 +39,5 @@ public class Profile
     public ICollection<ProfileTag> ProfileTags { get; set; } = new List<ProfileTag>();
     public ICollection<ProfileCriterionValue> CustomCriterionValues { get; set; } = new List<ProfileCriterionValue>();
     public ICollection<BookingRequest> BookingRequests { get; set; } = new List<BookingRequest>();
+    public ICollection<Housing> Housings { get; set; } = new List<Housing>();
 }

@@ -16,65 +16,17 @@ namespace RoomMates.Tests;
 
 public class ProfilesControllerTests
 {
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public async Task Create_BudgetAtOrBelowZero_ReturnsBadRequest(decimal budget)
-    {
-        using var db = TestDbContextFactory.CreateInMemory();
-        var controller = new ProfilesController(db);
-
-        var result = await controller.Create(ValidProfileRequest(budget), CancellationToken.None);
-
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
-        (await db.Profiles.CountAsync()).Should().Be(0);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(6)]
-    public async Task Create_CleanlinessOutsideOneToFive_ReturnsBadRequest(int cleanliness)
-    {
-        using var db = TestDbContextFactory.CreateInMemory();
-        var controller = new ProfilesController(db);
-        var request = ValidProfileRequest(cleanliness: cleanliness);
-        var validationResults = new List<ValidationResult>();
-        Validator.TryValidateObject(request, new ValidationContext(request), validationResults, validateAllProperties: true);
-        foreach (var error in validationResults)
-            foreach (var member in error.MemberNames)
-                controller.ModelState.AddModelError(member, error.ErrorMessage ?? "Invalid value.");
-
-        var result = await controller.Create(request, CancellationToken.None);
-
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
-        (await db.Profiles.CountAsync()).Should().Be(0);
-    }
-
     [Fact]
-    public async Task Create_ValidProfile_ReturnsCreatedAndPersistsProfile()
+    public void Create_ReturnsForbidBecauseRegistrationOwnsProfileCreation()
     {
         using var db = TestDbContextFactory.CreateInMemory();
         var controller = new ProfilesController(db);
 
-        var result = await controller.Create(ValidProfileRequest(), CancellationToken.None);
+        var result = controller.Create();
 
-        var created = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
-        var profile = created.Value.Should().BeOfType<Profile>().Subject;
-        profile.Id.Should().NotBeEmpty();
-        profile.FullName.Should().Be("Avery Example");
-        var persisted = await db.Profiles.SingleAsync();
-        persisted.Id.Should().Be(profile.Id);
-        persisted.Email.Should().Be("avery@example.com");
+        result.Should().BeOfType<ForbidResult>();
+        db.Profiles.Should().BeEmpty();
     }
-
-    private static ProfileUpsertRequest ValidProfileRequest(decimal budget = 1_000, int cleanliness = 3) => new()
-    {
-        FullName = "Avery Example",
-        Email = "avery@example.com",
-        AvatarUrl = "https://example.com/avatar.png",
-        Budget = budget,
-        Cleanliness = cleanliness
-    };
 }
 
 public class BookingRequestsControllerTests
@@ -85,12 +37,13 @@ public class BookingRequestsControllerTests
         using var db = TestDbContextFactory.CreateInMemory();
         var compatibility = new Mock<ICompatibilityService>();
         var controller = new BookingRequestsController(db, compatibility.Object, new Mock<IHubContext<BookingHub>>().Object);
+        Authenticate(controller, Guid.NewGuid());
 
         var result = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = Guid.NewGuid(), HousingId = Guid.NewGuid() },
+            new CreateBookingRequestDto { HousingId = Guid.NewGuid() },
             CancellationToken.None);
 
-        result.Result.Should().BeOfType<NotFoundObjectResult>();
+        result.Result.Should().BeOfType<UnauthorizedObjectResult>();
         compatibility.Verify(x => x.CalculateMatchScore(It.IsAny<Profile>(), It.IsAny<Housing>()), Times.Never);
     }
 
@@ -103,9 +56,10 @@ public class BookingRequestsControllerTests
         await db.SaveChangesAsync();
         var compatibility = new Mock<ICompatibilityService>();
         var controller = new BookingRequestsController(db, compatibility.Object, new Mock<IHubContext<BookingHub>>().Object);
+        Authenticate(controller, profile.Id);
 
         var result = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = profile.Id, HousingId = Guid.NewGuid() },
+            new CreateBookingRequestDto { HousingId = Guid.NewGuid() },
             CancellationToken.None);
 
         result.Result.Should().BeOfType<NotFoundObjectResult>();
@@ -127,9 +81,10 @@ public class BookingRequestsControllerTests
         var hubContext = new Mock<IHubContext<BookingHub>>();
         hubContext.SetupGet(context => context.Clients).Returns(hubClients.Object);
         var controller = new BookingRequestsController(db, compatibility.Object, hubContext.Object);
+        Authenticate(controller, profile.Id);
 
         var result = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = profile.Id, HousingId = housing.Id },
+            new CreateBookingRequestDto { HousingId = housing.Id },
             CancellationToken.None);
 
         var created = result.Result.Should().BeOfType<CreatedAtActionResult>().Subject;
@@ -201,6 +156,16 @@ public class BookingRequestsControllerTests
         Id = Guid.NewGuid(), Title = "Sunny apartment", City = "Kyiv", Street = "Main Street",
         BuildingNumber = "10", PricePerMonth = 800
     };
+
+    private static void Authenticate(BookingRequestsController controller, Guid profileId)
+    {
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, profileId.ToString())], "Test");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+    }
 }
 
 public class HousingsControllerTests

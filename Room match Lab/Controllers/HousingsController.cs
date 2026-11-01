@@ -100,13 +100,33 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     public async Task<ActionResult<Housing>> Create(Housing housing, CancellationToken cancellationToken)
     {
         var tenantId = User.FindFirstValue("TenantId");
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return Forbid();
+
+        var currentProfile = await FindCurrentProfileAsync(cancellationToken);
+        if (currentProfile is null)
+            return Forbid();
 
         housing.Id = Guid.NewGuid();
-        housing.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
+        housing.TenantId = tenantId;
+        housing.LandlordId = currentProfile.Id;
+        housing.Landlord = currentProfile;
         dbContext.Housings.Add(housing);
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateHousingPages();
         return CreatedAtAction(nameof(GetById), new { id = housing.Id }, housing);
+    }
+
+    private Task<Profile?> FindCurrentProfileAsync(CancellationToken cancellationToken)
+    {
+        var profileIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(profileIdClaim, out var profileId))
+            return dbContext.Profiles.FirstOrDefaultAsync(profile => profile.Id == profileId, cancellationToken);
+
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        return string.IsNullOrWhiteSpace(email)
+            ? Task.FromResult<Profile?>(null)
+            : dbContext.Profiles.FirstOrDefaultAsync(profile => profile.Email == email, cancellationToken);
     }
 
     [HttpPut("{id:guid}")]
@@ -114,6 +134,7 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     {
         var tenantId = User.FindFirstValue("TenantId");
         if (id != housing.Id) return BadRequest("Route id must match the housing id.");
+        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         if (!await dbContext.Housings.AnyAsync(
                 x => x.Id == id && x.TenantId == tenantId, cancellationToken)) return NotFound();
         housing.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
@@ -127,6 +148,7 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var tenantId = User.FindFirstValue("TenantId");
+        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         var housing = await dbContext.Housings
             .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, cancellationToken);
         if (housing is null) return NotFound();

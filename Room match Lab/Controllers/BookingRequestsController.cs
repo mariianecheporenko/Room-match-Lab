@@ -23,8 +23,13 @@ public sealed class BookingRequestsController(
     public async Task<ActionResult<IReadOnlyList<BookingRequest>>> GetAll(
         CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var tenantId = User.FindFirstValue("TenantId");
         var requests = await dbContext.BookingRequests
             .AsNoTracking()
+            .Include(request => request.Housing)
+            .Where(request => request.ProfileId == profileId ||
+                (!string.IsNullOrWhiteSpace(tenantId) && request.Housing.TenantId == tenantId))
             .OrderByDescending(request => request.CreatedAt)
             .ThenBy(request => request.Id)
             .ToListAsync(cancellationToken);
@@ -35,11 +40,16 @@ public sealed class BookingRequestsController(
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<BookingRequest>> GetById(Guid id, CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var tenantId = User.FindFirstValue("TenantId");
         var request = await dbContext.BookingRequests
             .AsNoTracking()
+            .Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
-
-        return request is null ? NotFound() : Ok(request);
+        if (request is null) return NotFound();
+        if (request.ProfileId != profileId &&
+            (string.IsNullOrWhiteSpace(tenantId) || request.Housing.TenantId != tenantId)) return Forbid();
+        return Ok(request);
     }
 
     [HttpGet("profile/{profileId:guid}")]
@@ -47,6 +57,8 @@ public sealed class BookingRequestsController(
         Guid profileId,
         CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (profileId != currentProfileId) return Forbid();
         var profileExists = await dbContext.Profiles
             .AnyAsync(profile => profile.Id == profileId, cancellationToken);
         if (!profileExists) return NotFound();
@@ -66,15 +78,18 @@ public sealed class BookingRequestsController(
         CreateBookingRequestDto body,
         CancellationToken cancellationToken)
     {
-        if (body.ProfileId == Guid.Empty || body.HousingId == Guid.Empty)
-            return BadRequest(new { error = "ProfileId and HousingId are required." });
+        if (body.HousingId == Guid.Empty)
+            return BadRequest(new { error = "HousingId is required." });
+
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId))
+            return Unauthorized(new { error = "The authenticated user has no valid profile identifier." });
 
         var profile = await dbContext.Profiles
             .Include(profile => profile.ProfileTags)
                 .ThenInclude(profileTag => profileTag.Tag)
             .Include(profile => profile.CustomCriterionValues)
-            .FirstOrDefaultAsync(profile => profile.Id == body.ProfileId, cancellationToken);
-        if (profile is null) return NotFound(new { error = "Profile was not found." });
+            .FirstOrDefaultAsync(profile => profile.Id == profileId, cancellationToken);
+        if (profile is null) return Unauthorized(new { error = "No profile is associated with this account." });
 
         var housing = await dbContext.Housings
             .Include(housing => housing.HousingTags)
@@ -82,6 +97,12 @@ public sealed class BookingRequestsController(
             .Include(housing => housing.CustomRequirements)
             .FirstOrDefaultAsync(housing => housing.Id == body.HousingId, cancellationToken);
         if (housing is null) return NotFound(new { error = "Housing was not found." });
+        var tenantId = User.FindFirstValue("TenantId");
+        var canBrowseAcrossUniversities = bool.TryParse(
+            User.FindFirstValue("IsCrossUniversity"), out var crossUniversity) && crossUniversity;
+        if (!canBrowseAcrossUniversities && !string.IsNullOrWhiteSpace(tenantId) &&
+            housing.TenantId is not null && housing.TenantId != tenantId)
+            return NotFound(new { error = "Housing was not found." });
 
         var request = new BookingRequest
         {
@@ -125,6 +146,8 @@ public sealed class BookingRequestsController(
         UpdateBookingRequestStatusDto body,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(body.Status))
+            return BadRequest(new { error = "Status must be Pending, Accepted, or Rejected." });
         var normalizedStatus = body.Status.Trim().ToLowerInvariant() switch
         {
             "pending" => "Pending",
@@ -135,9 +158,13 @@ public sealed class BookingRequestsController(
         if (normalizedStatus is null)
             return BadRequest(new { error = "Status must be Pending, Accepted, or Rejected." });
 
+        var tenantId = User.FindFirstValue("TenantId");
+        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         var request = await dbContext.BookingRequests
+            .Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
         if (request is null) return NotFound();
+        if (request.Housing.TenantId != tenantId) return Forbid();
 
         request.Status = normalizedStatus;
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -147,18 +174,26 @@ public sealed class BookingRequestsController(
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var request = await dbContext.BookingRequests.FindAsync([id], cancellationToken);
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var tenantId = User.FindFirstValue("TenantId");
+        var request = await dbContext.BookingRequests
+            .Include(request => request.Housing)
+            .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
         if (request is null) return NotFound();
+        if (request.ProfileId != profileId &&
+            (string.IsNullOrWhiteSpace(tenantId) || request.Housing.TenantId != tenantId)) return Forbid();
 
         dbContext.BookingRequests.Remove(request);
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
+
+    private bool CurrentProfileId(out Guid profileId) =>
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out profileId);
 }
 
 public sealed class CreateBookingRequestDto
 {
-    public Guid ProfileId { get; init; }
     public Guid HousingId { get; init; }
 }
 

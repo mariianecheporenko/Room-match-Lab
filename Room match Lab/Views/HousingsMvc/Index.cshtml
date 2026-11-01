@@ -7,8 +7,33 @@
             <h1 class="h2 mb-1">Available housings</h1>
             <p class="text-secondary mb-0">Browse current room listings.</p>
         </div>
-        <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Create New</a>
+        @if (!string.IsNullOrWhiteSpace(User.FindFirst("TenantId")?.Value))
+        {
+            <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Create New</a>
+        }
     </div>
+    <section class="card shadow-sm mb-4" aria-labelledby="housing-map-heading">
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h2 id="housing-map-heading" class="h4 mb-1">Housing map</h2>
+                    <p class="text-secondary mb-0">Explore listings by location and pet policy.</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label for="pet-policy-filter" class="form-label mb-0">Pet policy</label>
+                    <select id="pet-policy-filter" class="form-select" aria-label="Filter by pet policy">
+                        <option value="all">All</option>
+                        <option value="allowed-conditional">Allowed / Conditional</option>
+                        <option value="not-allowed">Not allowed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="ratio ratio-16x9 rounded overflow-hidden">
+                <div id="map" role="region" aria-label="Map of available housing listings"></div>
+            </div>
+            <p id="map-status" class="small text-secondary mt-2 mb-0" role="status" aria-live="polite">Loading listings…</p>
+        </div>
+    </section>
     <div class="card shadow-sm">
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle mb-0">
@@ -28,9 +53,12 @@
                         <td>@housing.City</td>
                         <td>@(housing.District ?? "—")</td>
                         <td class="text-end text-nowrap">
-                                    <!-- <a class="btn btn-sm btn-outline-primary" asp-controller="HousingsMvc" asp-action="Details" asp-route-id="@housing.Id">Open Landing Page</a> -->
-                            <a class="btn btn-sm btn-outline-secondary" asp-controller="HousingsMvc" asp-action="Edit" asp-route-id="@housing.Id">Edit</a>
-                            <a class="btn btn-sm btn-outline-danger" asp-controller="HousingsMvc" asp-action="Delete" asp-route-id="@housing.Id">Delete</a>
+                            <a class="btn btn-sm btn-outline-primary" asp-controller="HousingsMvc" asp-action="Details" asp-route-id="@housing.Id">Details</a>
+                            @if (housing.TenantId == User.FindFirst("TenantId")?.Value && !string.IsNullOrWhiteSpace(housing.TenantId))
+                            {
+                                <a class="btn btn-sm btn-outline-secondary" asp-controller="HousingsMvc" asp-action="Edit" asp-route-id="@housing.Id">Edit</a>
+                                <a class="btn btn-sm btn-outline-danger" asp-controller="HousingsMvc" asp-action="Delete" asp-route-id="@housing.Id">Delete</a>
+                            }
                         </td>
                     </tr>
                 }
@@ -38,3 +66,103 @@
             </table>
         </div>
     </div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+@section Scripts {
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    (() => {
+        const status = document.getElementById('map-status');
+        if (!window.L) {
+            status.textContent = 'Не вдалося завантажити карту. Перевірте підключення до мережі та оновіть сторінку.';
+            return;
+        }
+        const map = L.map('map').setView([49.0, 31.0], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        const markerLayer = L.layerGroup().addTo(map);
+        const filter = document.getElementById('pet-policy-filter');
+        let housings = [];
+
+        const value = (item, camelName, pascalName) => item[camelName] ?? item[pascalName];
+        const policyName = (policy) => {
+            if (typeof policy === 'string') return policy.toLowerCase();
+            return ({ 0: 'notallowed', 1: 'allowed', 2: 'conditional' })[policy] ?? '';
+        };
+
+        function renderMarkers() {
+            markerLayer.clearLayers();
+            const visible = housings.filter((housing) => {
+                const policy = policyName(value(housing, 'petPolicy', 'PetPolicy'));
+                if (filter.value === 'allowed-conditional') return policy === 'allowed' || policy === 'conditional';
+                if (filter.value === 'not-allowed') return policy === 'notallowed' || policy === 'not allowed';
+                return true;
+            });
+
+            const bounds = [];
+            visible.forEach((housing) => {
+                const latitude = Number(value(housing, 'latitude', 'Latitude'));
+                const longitude = Number(value(housing, 'longitude', 'Longitude'));
+                if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) return;
+
+                const id = value(housing, 'id', 'Id');
+                const marker = L.marker([latitude, longitude]);
+                const popup = document.createElement('div');
+                const title = document.createElement('strong');
+                title.textContent = value(housing, 'title', 'Title') ?? 'Housing';
+                const price = document.createElement('p');
+                price.className = 'mb-2';
+                const monthlyPrice = Number(value(housing, 'pricePerMonth', 'PricePerMonth'));
+                price.textContent = Number.isFinite(monthlyPrice)
+                    ? `${monthlyPrice.toLocaleString()} / month`
+                    : 'Price unavailable';
+                const details = document.createElement('a');
+                details.href = `/HousingsMvc/Details/${encodeURIComponent(id)}`;
+                details.textContent = 'View details';
+                popup.append(title, price, details);
+                marker.bindPopup(popup).addTo(markerLayer);
+                bounds.push([latitude, longitude]);
+            });
+
+            if (bounds.length === 1) map.setView(bounds[0], 13);
+            else if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24] });
+            status.textContent = `${visible.length} listing${visible.length === 1 ? '' : 's'} match this filter.`;
+        }
+
+        filter.addEventListener('change', renderMarkers);
+
+        const token = window.RoomMatesAuth?.getToken();
+        if (!token) {
+            status.textContent = 'Sign in to load housing locations.';
+            return;
+        }
+
+        fetch('/api/Housings?skip=0&limit=50', {
+            headers: {
+                Accept: 'application/json',
+                Authorization: 'Bearer ' + token
+            }
+        })
+            .then((response) => {
+                if (response.status === 401) {
+                    window.RoomMatesAuth?.clearToken();
+                    throw new Error('Your session expired. Sign in again to load housing locations.');
+                }
+                if (response.status === 403) throw new Error('Your account is not allowed to load housing locations.');
+                if (!response.ok) throw new Error(`Request failed (${response.status})`);
+                return response.json();
+            })
+            .then((data) => {
+                housings = Array.isArray(data.items) ? data.items : [];
+                renderMarkers();
+            })
+            .catch((error) => {
+                status.textContent = error.message || 'Housing locations could not be loaded. Please try again later.';
+                console.error('Could not load housing map data:', error);
+            });
+    })();
+</script>
+}

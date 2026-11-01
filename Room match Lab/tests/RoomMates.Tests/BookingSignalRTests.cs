@@ -1,4 +1,7 @@
 using FluentAssertions;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -56,9 +59,17 @@ public sealed class BookingSignalRTests
                 It.IsAny<Profile>(), It.IsAny<Housing>()))
             .Returns(85.5);
         var controller = new BookingRequestsController(db, compatibility.Object, hubContext.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, profile.Id.ToString())], "Test"))
+            }
+        };
 
         var result = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = profile.Id, HousingId = housing.Id },
+            new CreateBookingRequestDto { HousingId = housing.Id },
             CancellationToken.None);
 
         result.Result.Should().BeOfType<Microsoft.AspNetCore.Mvc.CreatedAtActionResult>();

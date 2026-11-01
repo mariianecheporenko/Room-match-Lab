@@ -17,7 +17,7 @@ namespace Room_match_Lab.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.4")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -85,6 +85,9 @@ namespace Room_match_Lab.Migrations
                     b.Property<bool>("HasExistingPets")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid>("LandlordId")
+                        .HasColumnType("uuid");
+
                     b.Property<double>("Latitude")
                         .HasColumnType("double precision");
 
@@ -113,16 +116,18 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("LandlordId");
 
                     b.ToTable("Housings", t =>
                         {
@@ -227,20 +232,16 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
-                    b.Property<string>("PasswordHash")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
                     b.Property<bool>("EnableDetailedAnalytics")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsCrossUniversity")
                         .HasColumnType("boolean");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsCrossUniversity")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsSmoker")
                         .HasColumnType("boolean");
@@ -250,6 +251,10 @@ namespace Room_match_Lab.Migrations
 
                     b.Property<int>("PartyTolerance")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("PetTolerance")
                         .IsRequired()
@@ -346,6 +351,17 @@ namespace Room_match_Lab.Migrations
                     b.Navigation("Housing");
 
                     b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("RoomMates.Models.Housing", b =>
+                {
+                    b.HasOne("RoomMates.Models.Profile", "Landlord")
+                        .WithMany("Housings")
+                        .HasForeignKey("LandlordId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Landlord");
                 });
 
             modelBuilder.Entity("RoomMates.Models.HousingCriterionRequirement", b =>
@@ -445,6 +461,8 @@ namespace Room_match_Lab.Migrations
                     b.Navigation("BookingRequests");
 
                     b.Navigation("CustomCriterionValues");
+
+                    b.Navigation("Housings");
 
                     b.Navigation("ProfileTags");
                 });

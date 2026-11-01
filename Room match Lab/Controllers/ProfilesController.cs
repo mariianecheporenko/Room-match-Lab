@@ -18,14 +18,10 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         [FromQuery] int limit = 10,
         CancellationToken cancellationToken = default)
     {
-        skip = Math.Max(0, skip);
-        limit = Math.Clamp(limit, 1, 100);
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
 
         var profiles = await ProfilesWithDetails()
-            .OrderBy(profile => profile.FullName)
-            .ThenBy(profile => profile.Id)
-            .Skip(skip)
-            .Take(limit)
+            .Where(profile => profile.Id == profileId)
             .ToListAsync(cancellationToken);
 
         return Ok(profiles);
@@ -34,6 +30,8 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Profile>> GetById(Guid id, CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        if (id != profileId) return Forbid();
         var profile = await ProfilesWithDetails()
             .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
@@ -41,46 +39,7 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
     }
 
     [HttpPost]
-    public async Task<ActionResult<Profile>> Create(
-        ProfileUpsertRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        var validationError = ValidateRequest(request);
-        if (validationError is not null) return BadRequest(new { error = validationError });
-
-        var relationError = await ValidateRelations(request, cancellationToken);
-        if (relationError is not null) return BadRequest(new { error = relationError });
-
-        if (await dbContext.Profiles.AnyAsync(profile => profile.Email == request.Email, cancellationToken))
-            return Conflict(new { error = "A profile with this email already exists." });
-
-        var profile = new Profile
-        {
-            Id = Guid.NewGuid(),
-            FullName = request.FullName.Trim(),
-            Email = request.Email.Trim(),
-            TenantId = request.TenantId?.Trim(),
-            EnableDetailedAnalytics = request.EnableDetailedAnalytics,
-            IsCrossUniversity = request.IsCrossUniversity,
-            AvatarUrl = request.AvatarUrl.Trim(),
-            Budget = request.Budget,
-            PetTolerance = request.PetTolerance,
-            OwnPets = request.OwnPets,
-            IsSmoker = request.IsSmoker,
-            Cleanliness = request.Cleanliness,
-            SleepSchedule = request.SleepSchedule,
-            PartyTolerance = request.PartyTolerance,
-            ProfileTags = BuildTagLinks(request.TagIds),
-            CustomCriterionValues = BuildCriterionValues(request.CustomCriterionValues)
-        };
-
-        dbContext.Profiles.Add(profile);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return CreatedAtAction(nameof(GetById), new { id = profile.Id }, profile);
-    }
+    public IActionResult Create() => Forbid();
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
@@ -88,6 +47,8 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         ProfileUpsertRequest request,
         CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        if (id != profileId) return Forbid();
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var validationError = ValidateRequest(request);
@@ -109,9 +70,6 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
 
         profile.FullName = request.FullName.Trim();
         profile.Email = request.Email.Trim();
-        profile.TenantId = request.TenantId?.Trim();
-        profile.EnableDetailedAnalytics = request.EnableDetailedAnalytics;
-        profile.IsCrossUniversity = request.IsCrossUniversity;
         profile.AvatarUrl = request.AvatarUrl.Trim();
         profile.Budget = request.Budget;
         profile.PetTolerance = request.PetTolerance;
@@ -131,6 +89,8 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        if (id != profileId) return Forbid();
         var profile = await dbContext.Profiles.FindAsync([id], cancellationToken);
         if (profile is null) return NotFound();
 
@@ -145,6 +105,9 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
             .ThenInclude(profileTag => profileTag.Tag)
         .Include(profile => profile.CustomCriterionValues)
             .ThenInclude(value => value.LifestyleCriterion);
+
+    private bool CurrentProfileId(out Guid profileId) =>
+        Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out profileId);
 
     private string? ValidateRequest(ProfileUpsertRequest request)
     {

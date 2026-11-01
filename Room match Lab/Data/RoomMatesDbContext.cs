@@ -32,6 +32,8 @@ public class RoomMatesDbContext(DbContextOptions<RoomMatesDbContext> options) : 
             entity.Property(x => x.TenantId).HasMaxLength(100);
             entity.Property(x => x.PricePerMonth).HasPrecision(12, 2);
             entity.Property(x => x.PetPolicy).HasConversion<string>();
+            entity.HasOne(x => x.Landlord).WithMany(x => x.Housings)
+                .HasForeignKey(x => x.LandlordId).OnDelete(DeleteBehavior.Restrict);
             entity.ToTable(t => t.HasCheckConstraint("CK_Housings_RequiredCleanliness", "\"RequiredCleanliness\" BETWEEN 1 AND 5"));
             entity.ToTable(t => t.HasCheckConstraint("CK_Housings_RequiredSleepSchedule", "\"RequiredSleepSchedule\" BETWEEN 1 AND 5"));
             entity.ToTable(t => t.HasCheckConstraint("CK_Housings_RequiredPartyTolerance", "\"RequiredPartyTolerance\" BETWEEN 1 AND 5"));

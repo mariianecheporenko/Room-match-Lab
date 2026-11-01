@@ -19,7 +19,8 @@ public class ProfilesMVCController : Controller
     // GET: PROFILES
     public async Task<IActionResult> Index()    
     {
-        return View(await _context.Profiles.ToListAsync());
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        return View(await _context.Profiles.Where(profile => profile.Id == profileId).ToListAsync());
     }
 
     // GET: PROFILES/Details/5
@@ -29,6 +30,9 @@ public class ProfilesMVCController : Controller
         {
             return NotFound();
         }
+
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (id != currentProfileId) return Forbid();
 
         var profile = await _context.Profiles
             .FirstOrDefaultAsync(m => m.Id == id);
@@ -55,6 +59,8 @@ public class ProfilesMVCController : Controller
     // GET: PROFILES/Edit/5
     public async Task<IActionResult> Edit(System.Guid? id)
     {
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (id != currentProfileId) return Forbid();
         if (id == null)
         {
             return NotFound();
@@ -75,6 +81,8 @@ public class ProfilesMVCController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(System.Guid? id, [Bind("Id,FullName,Email,AvatarUrl,Budget,PetTolerance,OwnPets,IsSmoker,Cleanliness,SleepSchedule,PartyTolerance,ProfileTags,CustomCriterionValues,BookingRequests")] Profile profile)
     {
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (id != currentProfileId || profile.Id != currentProfileId) return Forbid();
         if (id != profile.Id)
         {
             return NotFound();
@@ -117,6 +125,8 @@ public class ProfilesMVCController : Controller
     // GET: PROFILES/Delete/5
     public async Task<IActionResult> Delete(System.Guid? id)
     {
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (id != currentProfileId) return Forbid();
         if (id == null)
         {
             return NotFound();
@@ -137,6 +147,8 @@ public class ProfilesMVCController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(System.Guid? id)
     {
+        if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
+        if (id != currentProfileId) return Forbid();
         var profile = await _context.Profiles.FindAsync(id);
         if (profile != null)
         {
@@ -151,4 +163,7 @@ public class ProfilesMVCController : Controller
     {
         return _context.Profiles.Any(e => e.Id == id);
     }
+
+    private bool CurrentProfileId(out Guid profileId) =>
+        Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out profileId);
 }

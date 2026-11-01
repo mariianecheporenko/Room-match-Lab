@@ -21,6 +21,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     public async Task<IActionResult> Details(Guid id)
     {
         var housing = await VisibleHousings()
+            .Include(item => item.Landlord)
             .FirstOrDefaultAsync(item => item.Id == id);
 
         return housing is null ? NotFound() : View(housing);
@@ -31,6 +32,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     {
         var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
+        if (housing is not null && !CanManageHousing(housing)) return Forbid();
         return housing is null ? NotFound() : View(housing);
     }
 
@@ -54,6 +56,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         {
             return NotFound();
         }
+        if (!CanManageHousing(housing)) return Forbid();
 
         housing.Title = input.Title;
         housing.City = input.City;
@@ -80,27 +83,47 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     {
         var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
+        if (housing is not null && !CanManageHousing(housing)) return Forbid();
         return housing is null ? NotFound() : View(housing);
     }
 
     [HttpGet]
-    public IActionResult Create() => View();
+    public IActionResult Create() =>
+        string.IsNullOrWhiteSpace(User.FindFirstValue("TenantId")) ? Forbid() : View();
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing)
     {
+        var tenantId = User.FindFirstValue("TenantId");
+        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
+        var currentProfile = await FindCurrentProfileAsync();
+        if (currentProfile is null) return Forbid();
         if (!ModelState.IsValid)
         {
             return View(housing);
         }
 
         housing.Id = Guid.NewGuid();
-        housing.TenantId = User.FindFirstValue("TenantId");
+        housing.TenantId = tenantId;
+        housing.LandlordId = currentProfile.Id;
+        housing.Landlord = currentProfile;
         _context.Housings.Add(housing);
         await _context.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
+    }
+
+    private Task<Profile?> FindCurrentProfileAsync()
+    {
+        var profileIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(profileIdClaim, out var profileId))
+            return _context.Profiles.FirstOrDefaultAsync(profile => profile.Id == profileId);
+
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        return string.IsNullOrWhiteSpace(email)
+            ? Task.FromResult<Profile?>(null)
+            : _context.Profiles.FirstOrDefaultAsync(profile => profile.Email == email);
     }
 
     [HttpPost("HousingsMvc/Delete/{id:guid}")]
@@ -111,6 +134,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         var housing = await VisibleHousings().FirstOrDefaultAsync(item => item.Id == id);
         if (housing is not null)
         {
+            if (!CanManageHousing(housing)) return Forbid();
             _context.Housings.Remove(housing);
             await _context.SaveChangesAsync();
         }
@@ -132,5 +156,11 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
 
         return housings;
+    }
+
+    private bool CanManageHousing(Housing housing)
+    {
+        var tenantId = User.FindFirstValue("TenantId");
+        return !string.IsNullOrWhiteSpace(tenantId) && housing.TenantId == tenantId;
     }
 }

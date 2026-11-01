@@ -281,20 +281,24 @@ public sealed class AuthAndSaaSTests
         var controller = new BookingRequestsController(db, compatibility.Object, CreateHubContext());
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = CreateHttpContext(new Claim("EnableDetailedAnalytics", "False"))
+            HttpContext = CreateHttpContext(
+                new Claim(ClaimTypes.NameIdentifier, basicProfile.Id.ToString()),
+                new Claim("EnableDetailedAnalytics", "False"))
         };
 
         var basicResult = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = basicProfile.Id, HousingId = basicHousing.Id },
+            new CreateBookingRequestDto { HousingId = basicHousing.Id },
             CancellationToken.None);
         var basicMatch = basicResult.Result.Should().BeOfType<CreatedAtActionResult>().Subject.Value
             .Should().BeOfType<MatchResultDto>().Subject;
         basicMatch.MatchScore.Should().Be(85.0);
         basicMatch.DetailedStats.Should().BeNull();
 
-        controller.HttpContext.User = CreatePrincipal(new Claim("EnableDetailedAnalytics", "True"));
+        controller.HttpContext.User = CreatePrincipal(
+            new Claim(ClaimTypes.NameIdentifier, analyticsProfile.Id.ToString()),
+            new Claim("EnableDetailedAnalytics", "True"));
         var analyticsResult = await controller.Create(
-            new CreateBookingRequestDto { ProfileId = analyticsProfile.Id, HousingId = analyticsHousing.Id },
+            new CreateBookingRequestDto { HousingId = analyticsHousing.Id },
             CancellationToken.None);
         var analyticsMatch = analyticsResult.Result.Should().BeOfType<CreatedAtActionResult>().Subject.Value
             .Should().BeOfType<MatchResultDto>().Subject;

@@ -14,5 +14,138 @@
                 <dt class="col-sm-3">Pets</dt><dd class="col-sm-9">@Model.PetPolicy</dd>
                 <dt class="col-sm-3">Smoking</dt><dd class="col-sm-9">@(Model.AllowsSmoking ? "Allowed" : "Not allowed")</dd>
             </dl>
+            <section class="border-top mt-4 pt-4" aria-labelledby="landlord-heading">
+                <h2 id="landlord-heading" class="h5 mb-3">Власник житла</h2>
+                <div class="d-flex align-items-center gap-3">
+                    <img src="@Model.Landlord.AvatarUrl" alt="Фото профілю: @Model.Landlord.FullName"
+                         class="rounded-circle object-fit-cover" width="64" height="64" />
+                    <div>
+                        <div class="fw-semibold">@Model.Landlord.FullName</div>
+                        <a href="mailto:@Model.Landlord.Email">@Model.Landlord.Email</a>
+                    </div>
+                </div>
+            </section>
+            <div class="mt-4">
+                <button id="submit-booking-request" class="btn btn-primary" type="button">Відправити заявку на проживання</button>
+                <div id="booking-request-alert" class="alert d-none mt-3 mb-0" role="alert" aria-live="polite"></div>
+            </div>
         </div>
     </article>
+    <section class="container px-0 mt-4" aria-labelledby="compatibility-heading">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h2 id="compatibility-heading" class="h4 mb-1">Compatibility profile</h2>
+                <p class="text-secondary mb-3">Compare the owner’s preferences with a sample tenant profile.</p>
+                <div class="row justify-content-center">
+                    <div class="col-12 col-lg-8">
+                        <div class="ratio ratio-4x3">
+                            <canvas id="compatibilityRadar" role="img" aria-label="Radar chart comparing cleanliness, sleep schedule, and party tolerance"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+    (() => {
+        const canvas = document.getElementById('compatibilityRadar');
+        if (!window.Chart) {
+            const message = document.createElement('p');
+            message.className = 'alert alert-warning';
+            message.textContent = 'Не вдалося завантажити діаграму. Оновіть сторінку або перевірте підключення до мережі.';
+            canvas.replaceWith(message);
+            return;
+        }
+        new Chart(canvas, {
+            type: 'radar',
+            data: {
+                labels: ['Cleanliness', 'Sleep schedule', 'Party tolerance'],
+                datasets: [
+                    {
+                        label: 'Вимоги власника',
+                        data: [@Model.RequiredCleanliness, @Model.RequiredSleepSchedule, @Model.RequiredPartyTolerance],
+                        backgroundColor: 'rgba(13, 110, 253, 0.18)',
+                        borderColor: 'rgb(13, 110, 253)',
+                        pointBackgroundColor: 'rgb(13, 110, 253)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Твій профіль - Демо',
+                        data: [4, 3, 4],
+                        backgroundColor: 'rgba(25, 135, 84, 0.16)',
+                        borderColor: 'rgb(25, 135, 84)',
+                        pointBackgroundColor: 'rgb(25, 135, 84)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        min: 0,
+                        max: 5,
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        pointLabels: { font: { size: 13 } }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+
+        const bookingButton = document.getElementById('submit-booking-request');
+        const bookingAlert = document.getElementById('booking-request-alert');
+        bookingButton.addEventListener('click', async () => {
+            const token = window.RoomMatesAuth?.getToken();
+            bookingAlert.className = 'alert d-none mt-3 mb-0';
+            if (!token) {
+                bookingAlert.className = 'alert alert-warning mt-3 mb-0';
+                bookingAlert.textContent = 'Увійдіть у свій обліковий запис, щоб надіслати заявку.';
+                return;
+            }
+
+            bookingButton.disabled = true;
+            try {
+                const response = await fetch('/api/BookingRequests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        Authorization: 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ housingId: '@Model.Id' })
+                });
+
+                if (response.status === 401) {
+                    window.RoomMatesAuth?.clearToken();
+                    throw new Error('Сесія завершилася. Увійдіть знову та повторіть спробу.');
+                }
+                if (response.status === 403) throw new Error('Ваш обліковий запис не має права надсилати заявку.');
+                if (!response.ok) {
+                    let message = 'Не вдалося надіслати заявку. Спробуйте ще раз.';
+                    try {
+                        const errorBody = await response.json();
+                        message = errorBody.error || errorBody.title || message;
+                    } catch { }
+                    throw new Error(message);
+                }
+
+                bookingAlert.className = 'alert alert-success mt-3 mb-0';
+                bookingAlert.textContent = 'Заявку успішно надіслано.';
+            } catch (error) {
+                bookingAlert.className = 'alert alert-danger mt-3 mb-0';
+                bookingAlert.textContent = error.message || 'Не вдалося зв’язатися із сервером. Спробуйте ще раз.';
+            } finally {
+                bookingButton.disabled = false;
+            }
+        });
+    })();
+</script>
+}

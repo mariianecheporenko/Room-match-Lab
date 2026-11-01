@@ -3,9 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.SignalR;
-using RoomMates.Hubs;
+using System.Security.Claims;
 using RoomMates.Models;
 using RoomMates.Data;
 
@@ -13,27 +11,29 @@ using RoomMates.Data;
 public class BookingRequestsMVCController : Controller
 {
     private readonly RoomMatesDbContext _context;
-    private readonly IHubContext<BookingHub> _hubContext;
-
-    public BookingRequestsMVCController(RoomMatesDbContext context, IHubContext<BookingHub> hubContext)
+    public BookingRequestsMVCController(RoomMatesDbContext context)
     {
         _context = context;
-        _hubContext = hubContext;
     }
 
     // GET: BOOKINGREQUESTS
     public async Task<IActionResult> Index()    
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var tenantId = User.FindFirstValue("TenantId");
         return View(await _context.BookingRequests
             .Include(request => request.Profile)
             .Include(request => request.Housing)
             .AsNoTracking()
+            .Where(request => request.ProfileId == profileId ||
+                (!string.IsNullOrWhiteSpace(tenantId) && request.Housing.TenantId == tenantId))
             .ToListAsync());
     }
 
     // GET: BOOKINGREQUESTS/Details/5
     public async Task<IActionResult> Details(System.Guid? id)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
         if (id == null)
         {
             return NotFound();
@@ -47,74 +47,41 @@ public class BookingRequestsMVCController : Controller
         {
             return NotFound();
         }
+        if (!CanView(bookingrequest, profileId)) return Forbid();
 
         return View(bookingrequest);
     }
 
     // GET: BOOKINGREQUESTS/Create
-    public async Task<IActionResult> Create()
+    public IActionResult Create()
     {
-        await PopulateCreateOptions();
-        return View();
+        return RedirectToAction("Index", "HousingsMvc");
     }
 
-    // POST: BOOKINGREQUESTS/Create
-    // To protect from overposting attacks, enable the specific properties you want to bind to.
-    // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-    [HttpPost]
+    // Booking requests are submitted through the authenticated API from the housing details page.
+    [HttpPost, ActionName("Create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create([Bind("ProfileId,HousingId,MatchScore,Status")] BookingRequest bookingrequest)
+    public IActionResult CreatePost()
     {
-        // Navigation properties are loaded from the selected IDs, not posted by the form.
-        ModelState.Remove(nameof(bookingrequest.Profile));
-        ModelState.Remove(nameof(bookingrequest.Housing));
-        if (!await _context.Profiles.AnyAsync(profile => profile.Id == bookingrequest.ProfileId))
-        {
-            ModelState.AddModelError(nameof(bookingrequest.ProfileId), "Choose an existing profile.");
-        }
-        if (!await _context.Housings.AnyAsync(housing => housing.Id == bookingrequest.HousingId))
-        {
-            ModelState.AddModelError(nameof(bookingrequest.HousingId), "Choose an existing housing listing.");
-        }
-
-        if (ModelState.IsValid)
-        {
-            bookingrequest.Profile = await _context.Profiles
-                .SingleAsync(profile => profile.Id == bookingrequest.ProfileId);
-            bookingrequest.Housing = await _context.Housings
-                .SingleAsync(housing => housing.Id == bookingrequest.HousingId);
-            bookingrequest.Id = Guid.NewGuid();
-            bookingrequest.CreatedAt = DateTime.UtcNow;
-            _context.Add(bookingrequest);
-            await _context.SaveChangesAsync();
-            await _hubContext.Clients.All.SendAsync(
-                "ReceiveNewBooking",
-                new BookingCreatedEvent(
-                    bookingrequest.Id,
-                    bookingrequest.Housing.Title,
-                    bookingrequest.Profile.FullName,
-                    bookingrequest.MatchScore,
-                    bookingrequest.Status,
-                    bookingrequest.CreatedAt));
-            return RedirectToAction(nameof(Index));
-        }
-        await PopulateCreateOptions(bookingrequest.ProfileId, bookingrequest.HousingId);
-        return View(bookingrequest);
+        return RedirectToAction("Index", "HousingsMvc");
     }
 
     // GET: BOOKINGREQUESTS/Edit/5
     public async Task<IActionResult> Edit(System.Guid? id)
     {
+        if (!CanManageRequests()) return Forbid();
         if (id == null)
         {
             return NotFound();
         }
 
-        var bookingrequest = await _context.BookingRequests.FindAsync(id);
+        var bookingrequest = await _context.BookingRequests.Include(request => request.Housing)
+            .FirstOrDefaultAsync(request => request.Id == id);
         if (bookingrequest == null)
         {
             return NotFound();
         }
+        if (!CanManageHousing(bookingrequest.Housing)) return Forbid();
         return View(bookingrequest);
     }
 
@@ -125,48 +92,50 @@ public class BookingRequestsMVCController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(System.Guid? id, [Bind("Id,ProfileId,Profile,HousingId,Housing,MatchScore,Status,CreatedAt")] BookingRequest bookingrequest)
     {
-        if (id != bookingrequest.Id)
+        if (id != bookingrequest.Id) return NotFound();
+        if (!CanManageRequests()) return Forbid();
+        var existing = await _context.BookingRequests.Include(request => request.Housing)
+            .FirstOrDefaultAsync(request => request.Id == id);
+        if (existing is null) return NotFound();
+        if (!CanManageHousing(existing.Housing)) return Forbid();
+        if (string.IsNullOrWhiteSpace(bookingrequest.Status))
         {
-            return NotFound();
+            ModelState.AddModelError(nameof(bookingrequest.Status), "Choose Pending, Accepted, or Rejected.");
+            return View(existing);
         }
-
-        if (ModelState.IsValid)
+        var status = bookingrequest.Status.Trim().ToLowerInvariant() switch
         {
-            try
-            {
-                _context.Update(bookingrequest);
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!BookingRequestExists(bookingrequest.Id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-            return RedirectToAction(nameof(Index));
+            "pending" => "Pending",
+            "accepted" => "Accepted",
+            "rejected" => "Rejected",
+            _ => null
+        };
+        if (status is null)
+        {
+            ModelState.AddModelError(nameof(bookingrequest.Status), "Choose Pending, Accepted, or Rejected.");
+            return View(existing);
         }
-        return View(bookingrequest);
+        existing.Status = status;
+        await _context.SaveChangesAsync();
+        return RedirectToAction(nameof(Index));
     }
 
     // GET: BOOKINGREQUESTS/Delete/5
     public async Task<IActionResult> Delete(System.Guid? id)
     {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
         if (id == null)
         {
             return NotFound();
         }
 
-        var bookingrequest = await _context.BookingRequests
+        var bookingrequest = await _context.BookingRequests.Include(request => request.Housing)
             .FirstOrDefaultAsync(m => m.Id == id);
         if (bookingrequest == null)
         {
             return NotFound();
         }
+        if (!CanView(bookingrequest, profileId)) return Forbid();
 
         return View(bookingrequest);
     }
@@ -176,9 +145,12 @@ public class BookingRequestsMVCController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(System.Guid? id)
     {
-        var bookingrequest = await _context.BookingRequests.FindAsync(id);
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var bookingrequest = await _context.BookingRequests.Include(request => request.Housing)
+            .FirstOrDefaultAsync(request => request.Id == id);
         if (bookingrequest != null)
         {
+            if (!CanView(bookingrequest, profileId)) return Forbid();
             _context.BookingRequests.Remove(bookingrequest);
         }
 
@@ -186,18 +158,18 @@ public class BookingRequestsMVCController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private bool BookingRequestExists(System.Guid? id)
+    private bool CurrentProfileId(out Guid profileId) =>
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out profileId);
+
+    private bool CanView(BookingRequest request, Guid profileId) =>
+        request.ProfileId == profileId || CanManageHousing(request.Housing);
+
+    private bool CanManageRequests() => !string.IsNullOrWhiteSpace(User.FindFirstValue("TenantId"));
+
+    private bool CanManageHousing(Housing housing)
     {
-        return _context.BookingRequests.Any(e => e.Id == id);
+        var tenantId = User.FindFirstValue("TenantId");
+        return !string.IsNullOrWhiteSpace(tenantId) && housing.TenantId == tenantId;
     }
 
-    private async Task PopulateCreateOptions(Guid? selectedProfileId = null, Guid? selectedHousingId = null)
-    {
-        ViewBag.ProfileId = new SelectList(
-            await _context.Profiles.AsNoTracking().OrderBy(profile => profile.FullName).ToListAsync(),
-            "Id", "FullName", selectedProfileId);
-        ViewBag.HousingId = new SelectList(
-            await _context.Housings.AsNoTracking().OrderBy(housing => housing.Title).ToListAsync(),
-            "Id", "Title", selectedHousingId);
-    }
 }
