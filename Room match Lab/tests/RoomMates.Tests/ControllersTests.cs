@@ -107,7 +107,10 @@ public class BookingRequestsControllerTests
     {
         using var db = TestDbContextFactory.CreateInMemory();
         var profile = ValidProfile();
+        profile.Role = "Landlord";
+        profile.IsApproved = true;
         var housing = ValidHousing();
+        housing.LandlordId = profile.Id;
         var booking = new BookingRequest { Id = Guid.NewGuid(), Profile = profile, Housing = housing, Status = "Pending" };
         db.BookingRequests.Add(booking);
         await db.SaveChangesAsync();
@@ -115,7 +118,7 @@ public class BookingRequestsControllerTests
             db,
             new Mock<ICompatibilityService>().Object,
             new Mock<IHubContext<BookingHub>>().Object);
-        Authenticate(controller, Guid.NewGuid(), "KNU");
+        Authenticate(controller, profile.Id, "KNU");
 
         var result = await controller.UpdateStatus(booking.Id, new UpdateBookingRequestStatusDto { Status = "Accepted" }, CancellationToken.None);
 
@@ -274,7 +277,7 @@ public class HousingsControllerTests
     private static Profile ValidLandlord() => new()
     {
         Id = Guid.NewGuid(), FullName = "Landlord Example", Email = $"{Guid.NewGuid():N}@example.com",
-        AvatarUrl = "https://example.com/landlord.png", TenantId = "KNU"
+        AvatarUrl = "https://example.com/landlord.png", TenantId = "KNU", Role = "Landlord", IsApproved = true
     };
 
     private static HousingsController CreateController(
@@ -284,7 +287,10 @@ public class HousingsControllerTests
     {
         var claims = new List<Claim> { new("TenantId", "KNU") };
         if (profileId.HasValue)
+        {
             claims.Add(new Claim(ClaimTypes.NameIdentifier, profileId.Value.ToString()));
+            claims.Add(new Claim(ClaimTypes.Role, "Landlord"));
+        }
         var controller = new HousingsController(db, cache)
         {
             ControllerContext = new ControllerContext

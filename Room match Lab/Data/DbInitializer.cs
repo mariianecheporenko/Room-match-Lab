@@ -187,12 +187,47 @@ public static class DbInitializer
                 IsSmoker = false,
                 OwnPets = false,
                 PetTolerance = PetPolicy.Allowed
+            },
+            new Profile
+            {
+                FullName = "RoomMates Admin",
+                Email = "admin@roommates.ua",
+                AvatarUrl = "https://www.gravatar.com/avatar/?d=mp",
+                Role = "Admin",
+                IsApproved = true
+            },
+            new Profile
+            {
+                FullName = "Approved KNU Landlord",
+                Email = "landlord.approved@knu.ua",
+                TenantId = "KNU",
+                AvatarUrl = "https://www.gravatar.com/avatar/?d=mp",
+                Role = "Landlord",
+                IsApproved = true
+            },
+            new Profile
+            {
+                FullName = "Pending KNU Landlord",
+                Email = "landlord.pending@knu.ua",
+                TenantId = "KNU",
+                AvatarUrl = "https://www.gravatar.com/avatar/?d=mp",
+                Role = "Landlord",
+                IsApproved = false
             }
         };
 
         var result = new Dictionary<string, Profile>(StringComparer.OrdinalIgnoreCase);
         foreach (var seed in profiles)
         {
+            seed.Role = seed.Email switch
+            {
+                "landlord.naukma@example.ua" or "landlord.general@example.ua" or
+                "landlord.approved@knu.ua" or "landlord.pending@knu.ua" => "Landlord",
+                "admin@roommates.ua" => "Admin",
+                _ => "Student"
+            };
+            seed.IsApproved = seed.Role != "Landlord" || seed.Email != "landlord.pending@knu.ua";
+
             var profile = context.Profiles.SingleOrDefault(item => item.Email == seed.Email);
             if (profile is null)
             {
@@ -216,6 +251,8 @@ public static class DbInitializer
                 profile.IsSmoker = seed.IsSmoker;
                 profile.OwnPets = seed.OwnPets;
                 profile.PetTolerance = seed.PetTolerance;
+                profile.Role = seed.Role;
+                profile.IsApproved = seed.IsApproved;
             }
             result.Add(profile.Email, profile);
         }

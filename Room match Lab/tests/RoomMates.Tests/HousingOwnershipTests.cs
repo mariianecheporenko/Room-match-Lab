@@ -62,7 +62,15 @@ public class HousingOwnershipTests
 
         var profiles = db.Profiles.ToDictionary(profile => profile.Id);
         var housings = db.Housings.Include(housing => housing.Landlord).ToList();
-        db.Profiles.Should().HaveCount(7);
+        db.Profiles.Should().HaveCount(10);
+        db.Profiles.Single(profile => profile.Email == "admin@roommates.ua")
+            .Should().Match<Profile>(profile => profile.Role == "Admin" && profile.IsApproved);
+        db.Profiles.Single(profile => profile.Email == "landlord.approved@knu.ua")
+            .Should().Match<Profile>(profile => profile.Role == "Landlord" && profile.IsApproved);
+        db.Profiles.Single(profile => profile.Email == "landlord.pending@knu.ua")
+            .Should().Match<Profile>(profile => profile.Role == "Landlord" && !profile.IsApproved);
+        db.Profiles.Single(profile => profile.Email == "student.knu@knu.ua")
+            .Should().Match<Profile>(profile => profile.Role == "Student" && profile.IsApproved);
         housings.Should().HaveCount(6);
         housings.Should().OnlyContain(housing => profiles.ContainsKey(housing.LandlordId));
         housings.Select(housing => housing.LandlordId).Distinct().Should().HaveCount(6);
@@ -78,7 +86,8 @@ public class HousingOwnershipTests
         var identity = new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, userProfile.Id.ToString()),
-            new Claim("TenantId", userProfile.TenantId ?? "KNU")
+            new Claim("TenantId", userProfile.TenantId ?? "KNU"),
+            new Claim(ClaimTypes.Role, "Landlord")
         ], "Test");
 
         return new HousingsMvcController(db)
@@ -96,7 +105,9 @@ public class HousingOwnershipTests
         FullName = "Test Owner",
         Email = email,
         TenantId = tenantId,
-        AvatarUrl = "https://example.com/avatar.png"
+        AvatarUrl = "https://example.com/avatar.png",
+        Role = "Landlord",
+        IsApproved = true
     };
 
     private static Housing MakeHousing(string title) => new()

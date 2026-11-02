@@ -11,6 +11,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
 {
     private readonly RoomMatesDbContext _context = context;
 
+    [AllowAnonymous]
     public async Task<IActionResult> Index()
     {
         return View(await VisibleHousings()
@@ -18,6 +19,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             .ToListAsync());
     }
 
+    [AllowAnonymous]
     public async Task<IActionResult> Details(Guid id)
     {
         var housing = await VisibleHousings()
@@ -28,15 +30,17 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     }
 
     [HttpGet]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     public async Task<IActionResult> Edit(Guid id)
     {
         var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
-        if (housing is not null && !CanManageHousing(housing)) return Forbid();
+        if (housing is not null && !await CanManageHousingAsync(housing)) return Forbid();
         return housing is null ? NotFound() : View(housing);
     }
 
     [HttpPost]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(Guid id, [Bind("Id,Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing input)
     {
@@ -56,7 +60,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         {
             return NotFound();
         }
-        if (!CanManageHousing(housing)) return Forbid();
+        if (!await CanManageHousingAsync(housing)) return Forbid();
 
         housing.Title = input.Title;
         housing.City = input.City;
@@ -79,34 +83,38 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     }
 
     [HttpGet]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var housing = await VisibleHousings()
             .FirstOrDefaultAsync(item => item.Id == id);
-        if (housing is not null && !CanManageHousing(housing)) return Forbid();
+        if (housing is not null && !await CanManageHousingAsync(housing)) return Forbid();
         return housing is null ? NotFound() : View(housing);
     }
 
     [HttpGet]
-    public IActionResult Create() =>
-        string.IsNullOrWhiteSpace(User.FindFirstValue("TenantId")) ? Forbid() : View();
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
+    public IActionResult Create() => View();
 
     [HttpPost]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing)
     {
-        var tenantId = User.FindFirstValue("TenantId");
-        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         var currentProfile = await FindCurrentProfileAsync();
         if (currentProfile is null) return Forbid();
+        if (currentProfile.Role == "Landlord" && !currentProfile.IsApproved)
+            return StatusCode(StatusCodes.Status403Forbidden, "Your landlord account is pending admin approval.");
+        if (User.IsInRole("Admin") ? currentProfile.Role != "Admin" : currentProfile.Role != "Landlord")
+            return Forbid();
         if (!ModelState.IsValid)
         {
             return View(housing);
         }
 
         housing.Id = Guid.NewGuid();
-        housing.TenantId = tenantId;
+        housing.TenantId = currentProfile.TenantId;
         housing.LandlordId = currentProfile.Id;
         housing.Landlord = currentProfile;
         _context.Housings.Add(housing);
@@ -127,6 +135,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     }
 
     [HttpPost("HousingsMvc/Delete/{id:guid}")]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ActionName("Delete")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(Guid id)
@@ -134,7 +143,7 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
         var housing = await VisibleHousings().FirstOrDefaultAsync(item => item.Id == id);
         if (housing is not null)
         {
-            if (!CanManageHousing(housing)) return Forbid();
+            if (!await CanManageHousingAsync(housing)) return Forbid();
             _context.Housings.Remove(housing);
             await _context.SaveChangesAsync();
         }
@@ -152,15 +161,18 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             User.FindFirstValue("IsCrossUniversity"),
             out var parsedCrossUniversity) && parsedCrossUniversity;
 
-        if (!isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
+        if (!User.IsInRole("Admin") && !isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
             housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
 
         return housings;
     }
 
-    private bool CanManageHousing(Housing housing)
+    private async Task<bool> CanManageHousingAsync(Housing housing)
     {
-        var tenantId = User.FindFirstValue("TenantId");
-        return !string.IsNullOrWhiteSpace(tenantId) && housing.TenantId == tenantId;
+        if (User.IsInRole("Admin")) return true;
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId) ||
+            housing.LandlordId != profileId) return false;
+        return await _context.Profiles.AnyAsync(profile =>
+            profile.Id == profileId && profile.Role == "Landlord" && profile.IsApproved);
     }
 }

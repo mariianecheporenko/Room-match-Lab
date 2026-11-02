@@ -21,6 +21,8 @@ public class RoomMatesDbContext(DbContextOptions<RoomMatesDbContext> options) : 
             entity.Property(x => x.PasswordHash).HasMaxLength(512);
             entity.Property(x => x.TenantId).HasMaxLength(100);
             entity.Property(x => x.PetTolerance).HasConversion<string>();
+            entity.Property(x => x.Role).HasMaxLength(20).HasDefaultValue("Student");
+            entity.Property(x => x.IsApproved).HasDefaultValue(false);
             entity.ToTable(t => t.HasCheckConstraint("CK_Profiles_Cleanliness", "\"Cleanliness\" BETWEEN 1 AND 5"));
             entity.ToTable(t => t.HasCheckConstraint("CK_Profiles_SleepSchedule", "\"SleepSchedule\" BETWEEN 1 AND 5"));
             entity.ToTable(t => t.HasCheckConstraint("CK_Profiles_PartyTolerance", "\"PartyTolerance\" BETWEEN 1 AND 5"));

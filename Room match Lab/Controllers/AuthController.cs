@@ -44,6 +44,8 @@ public sealed class AuthController(
             Id = Guid.NewGuid(),
             FullName = request.FullName.Trim(),
             Email = email,
+            Role = "Student",
+            IsApproved = true,
             AvatarUrl = "https://www.gravatar.com/avatar/?d=mp",
             TenantId = DetectTenant(email)
         };
@@ -123,6 +125,8 @@ public sealed class AuthController(
             {
                 Id = Guid.NewGuid(),
                 Email = email,
+                Role = "Student",
+                IsApproved = true,
                 FullName = string.IsNullOrWhiteSpace(googlePayload.Name) ? email : googlePayload.Name.Trim(),
                 AvatarUrl = string.IsNullOrWhiteSpace(googlePayload.Picture)
                     ? "https://www.gravatar.com/avatar/?d=mp"
@@ -166,6 +170,17 @@ public sealed class AuthController(
         profile.PasswordHash = passwordHasher.HashPassword(profile, request.Password);
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    [HttpPost("refresh")]
+    [Authorize]
+    public async Task<ActionResult<LoginResponseDto>> Refresh(CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId))
+            return Unauthorized();
+        var profile = await dbContext.Profiles.FirstOrDefaultAsync(item => item.Id == profileId, cancellationToken);
+        if (profile is null) return Unauthorized();
+        return Ok(await CreateAuthenticatedResponseAsync(profile));
     }
 
     [HttpPost("logout")]
@@ -238,6 +253,8 @@ public sealed class AuthController(
         {
             new(ClaimTypes.NameIdentifier, profile.Id.ToString()),
             new(ClaimTypes.Email, profile.Email),
+            new(ClaimTypes.Role, profile.Role),
+            new("IsApproved", profile.IsApproved.ToString()),
             new("EnableDetailedAnalytics", profile.EnableDetailedAnalytics.ToString()),
             new("IsCrossUniversity", profile.IsCrossUniversity.ToString())
         };

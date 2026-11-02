@@ -2,6 +2,8 @@
 
 @{
     ViewData["Title"] = "Edit";
+    var availableTags = ViewBag.AvailableTags as IEnumerable<RoomMates.Models.Tag> ?? [];
+    var selectedTagIds = Model.ProfileTags.Select(link => link.TagId).ToHashSet();
 }
 
 <h1>Edit</h1>
@@ -11,7 +13,7 @@
 <div class="row">
     <div class="col-md-4">
         <form asp-action="Edit">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div asp-validation-summary="All" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group">
                 <label asp-for="FullName" class="control-label"></label>
@@ -50,33 +52,31 @@
             </div>
             <div class="form-group">
                 <label asp-for="Cleanliness" class="control-label"></label>
-                <input asp-for="Cleanliness" class="form-control" />
+                <input asp-for="Cleanliness" type="number" min="1" max="5" step="1" class="form-control rating-scale" />
                 <span asp-validation-for="Cleanliness" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="SleepSchedule" class="control-label"></label>
-                <input asp-for="SleepSchedule" class="form-control" />
+                <input asp-for="SleepSchedule" type="number" min="1" max="5" step="1" class="form-control rating-scale" />
                 <span asp-validation-for="SleepSchedule" class="text-danger"></span>
             </div>
             <div class="form-group">
                 <label asp-for="PartyTolerance" class="control-label"></label>
-                <input asp-for="PartyTolerance" class="form-control" />
+                <input asp-for="PartyTolerance" type="number" min="1" max="5" step="1" class="form-control rating-scale" />
                 <span asp-validation-for="PartyTolerance" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="ProfileTags" class="control-label"></label>
-                <input asp-for="ProfileTags" class="form-control" />
-                <span asp-validation-for="ProfileTags" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="CustomCriterionValues" class="control-label"></label>
-                <input asp-for="CustomCriterionValues" class="form-control" />
-                <span asp-validation-for="CustomCriterionValues" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="BookingRequests" class="control-label"></label>
-                <input asp-for="BookingRequests" class="form-control" />
-                <span asp-validation-for="BookingRequests" class="text-danger"></span>
+            <div class="form-group mt-3" id="profile-tags">
+                <fieldset>
+                    <legend class="control-label">Interests (choose up to 5)</legend>
+                    @foreach (var tag in availableTags)
+                    {
+                        <label class="form-check">
+                            <input class="form-check-input profile-tag-choice" type="checkbox" name="tagIds" value="@tag.Id" checked="@selectedTagIds.Contains(tag.Id)" />
+                            <span class="form-check-label">@tag.Name</span>
+                        </label>
+                    }
+                </fieldset>
+                <div id="profile-tag-count" class="form-text" aria-live="polite"></div>
             </div>
             <div class="form-group">
                 <input type="submit" value="Save" class="btn btn-primary" />
@@ -91,4 +91,29 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        (() => {
+            const choices = Array.from(document.querySelectorAll(".profile-tag-choice"));
+            const countLabel = document.getElementById("profile-tag-count");
+            const ratingInputs = Array.from(document.querySelectorAll(".rating-scale"));
+            const max = 5;
+
+            function updateChoices() {
+                const selectedCount = choices.filter(choice => choice.checked).length;
+                choices.forEach(choice => {
+                    choice.disabled = !choice.checked && selectedCount >= max;
+                });
+                countLabel.textContent = `${selectedCount} / ${max} selected`;
+            }
+
+            choices.forEach(choice => choice.addEventListener("change", updateChoices));
+            updateChoices();
+
+            ratingInputs.forEach(input => input.addEventListener("input", () => {
+                const value = Number(input.value);
+                if (input.value !== "" && value > max) input.value = String(max);
+                if (input.value !== "" && value < 1) input.value = "1";
+            }));
+        })();
+    </script>
 }

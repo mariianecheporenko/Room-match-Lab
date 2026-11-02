@@ -19,6 +19,7 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     private static readonly object CacheInvalidationLock = new();
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<PagedResult<Housing>>> GetHousings(
         [FromQuery] int skip = 0,
         [FromQuery] int limit = 10,
@@ -27,8 +28,9 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
         skip = Math.Max(0, skip);
         limit = Math.Clamp(limit, 1, 100);
         var tenantId = User.FindFirstValue("TenantId");
-        var isCrossUniversity = bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
-            && crossUniversityClaim;
+        var isCrossUniversity = User.IsInRole("Admin") ||
+            (bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
+                && crossUniversityClaim);
         var tenantScope = isCrossUniversity || string.IsNullOrWhiteSpace(tenantId)
             ? "all"
             : $"tenant_{tenantId}";
@@ -83,11 +85,13 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<ActionResult<Housing>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var tenantId = User.FindFirstValue("TenantId");
-        var isCrossUniversity = bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
-            && crossUniversityClaim;
+        var isCrossUniversity = User.IsInRole("Admin") ||
+            (bool.TryParse(User.FindFirstValue("IsCrossUniversity"), out var crossUniversityClaim)
+                && crossUniversityClaim);
 
         var housing = await GetVisibleHousings(tenantId, isCrossUniversity).AsNoTracking()
             .Include(x => x.CustomRequirements).ThenInclude(x => x.LifestyleCriterion)
@@ -97,18 +101,20 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     }
 
     [HttpPost]
+    [Authorize(Roles = "Landlord,Admin")]
     public async Task<ActionResult<Housing>> Create(Housing housing, CancellationToken cancellationToken)
     {
-        var tenantId = User.FindFirstValue("TenantId");
-        if (string.IsNullOrWhiteSpace(tenantId))
-            return Forbid();
-
         var currentProfile = await FindCurrentProfileAsync(cancellationToken);
         if (currentProfile is null)
             return Forbid();
+        if (currentProfile.Role == "Landlord" && !currentProfile.IsApproved)
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "Your landlord account is pending admin approval." });
+        if (User.IsInRole("Admin") ? currentProfile.Role != "Admin" : currentProfile.Role != "Landlord")
+            return Forbid();
 
         housing.Id = Guid.NewGuid();
-        housing.TenantId = tenantId;
+        housing.TenantId = currentProfile.TenantId;
         housing.LandlordId = currentProfile.Id;
         housing.Landlord = currentProfile;
         dbContext.Housings.Add(housing);
@@ -129,29 +135,54 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
             : dbContext.Profiles.FirstOrDefaultAsync(profile => profile.Email == email, cancellationToken);
     }
 
+    private Task<bool> CanManageHousingAsync(Housing housing, CancellationToken cancellationToken)
+    {
+        if (User.IsInRole("Admin")) return Task.FromResult(true);
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId) ||
+            housing.LandlordId != profileId)
+            return Task.FromResult(false);
+
+        return dbContext.Profiles.AnyAsync(profile =>
+            profile.Id == profileId && profile.Role == "Landlord" && profile.IsApproved, cancellationToken);
+    }
+
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Landlord,Admin")]
     public async Task<IActionResult> Update(Guid id, Housing housing, CancellationToken cancellationToken)
     {
-        var tenantId = User.FindFirstValue("TenantId");
         if (id != housing.Id) return BadRequest("Route id must match the housing id.");
-        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
-        if (!await dbContext.Housings.AnyAsync(
-                x => x.Id == id && x.TenantId == tenantId, cancellationToken)) return NotFound();
-        housing.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
-        dbContext.Entry(housing).State = EntityState.Modified;
+        var existing = await dbContext.Housings.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (existing is null) return NotFound();
+        if (!await CanManageHousingAsync(existing, cancellationToken)) return Forbid();
+
+        existing.Title = housing.Title;
+        existing.City = housing.City;
+        existing.District = housing.District;
+        existing.Street = housing.Street;
+        existing.BuildingNumber = housing.BuildingNumber;
+        existing.ApartmentNumber = housing.ApartmentNumber;
+        existing.Latitude = housing.Latitude;
+        existing.Longitude = housing.Longitude;
+        existing.PricePerMonth = housing.PricePerMonth;
+        existing.PetPolicy = housing.PetPolicy;
+        existing.HasExistingPets = housing.HasExistingPets;
+        existing.AllowsSmoking = housing.AllowsSmoking;
+        existing.RequiredCleanliness = housing.RequiredCleanliness;
+        existing.RequiredSleepSchedule = housing.RequiredSleepSchedule;
+        existing.RequiredPartyTolerance = housing.RequiredPartyTolerance;
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateHousingPages();
         return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Landlord,Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var tenantId = User.FindFirstValue("TenantId");
-        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         var housing = await dbContext.Housings
-            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (housing is null) return NotFound();
+        if (!await CanManageHousingAsync(housing, cancellationToken)) return Forbid();
         dbContext.Housings.Remove(housing);
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateHousingPages();
@@ -172,7 +203,7 @@ public class HousingsController(RoomMatesDbContext dbContext, IMemoryCache cache
     private IQueryable<Housing> GetVisibleHousings(string? tenantId, bool isCrossUniversity)
     {
         var housings = dbContext.Housings.AsQueryable();
-        if (!isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
+        if (!User.IsInRole("Admin") && !isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
             housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
 
         return housings;

@@ -240,6 +240,11 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<bool>("IsApproved")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsCrossUniversity")
                         .HasColumnType("boolean");
 
@@ -259,6 +264,13 @@ namespace Room_match_Lab.Migrations
                     b.Property<string>("PetTolerance")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Student");
 
                     b.Property<int>("SleepSchedule")
                         .HasColumnType("integer");

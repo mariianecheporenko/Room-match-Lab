@@ -17,19 +17,22 @@ namespace RoomMates.Controllers;
 public sealed class BookingRequestsController(
     RoomMatesDbContext dbContext,
     ICompatibilityService compatibilityService,
-    IHubContext<BookingHub> hubContext) : ControllerBase
+    IHubContext<BookingHub> hubContext,
+    ITelegramNotificationService? telegramService = null) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<BookingRequest>>> GetAll(
         CancellationToken cancellationToken)
     {
         if (!CurrentProfileId(out var profileId)) return Unauthorized();
-        var tenantId = User.FindFirstValue("TenantId");
+        var isAdmin = User.IsInRole("Admin");
+        var isLandlord = User.IsInRole("Landlord");
         var requests = await dbContext.BookingRequests
             .AsNoTracking()
             .Include(request => request.Housing)
-            .Where(request => request.ProfileId == profileId ||
-                (!string.IsNullOrWhiteSpace(tenantId) && request.Housing.TenantId == tenantId))
+            .Where(request => isAdmin || request.ProfileId == profileId ||
+                (isLandlord && request.Housing.LandlordId == profileId &&
+                    request.Housing.Landlord.Role == "Landlord" && request.Housing.Landlord.IsApproved))
             .OrderByDescending(request => request.CreatedAt)
             .ThenBy(request => request.Id)
             .ToListAsync(cancellationToken);
@@ -41,14 +44,12 @@ public sealed class BookingRequestsController(
     public async Task<ActionResult<BookingRequest>> GetById(Guid id, CancellationToken cancellationToken)
     {
         if (!CurrentProfileId(out var profileId)) return Unauthorized();
-        var tenantId = User.FindFirstValue("TenantId");
         var request = await dbContext.BookingRequests
             .AsNoTracking()
             .Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
         if (request is null) return NotFound();
-        if (request.ProfileId != profileId &&
-            (string.IsNullOrWhiteSpace(tenantId) || request.Housing.TenantId != tenantId)) return Forbid();
+        if (!await CanViewRequestAsync(request, profileId, cancellationToken)) return Forbid();
         return Ok(request);
     }
 
@@ -58,7 +59,7 @@ public sealed class BookingRequestsController(
         CancellationToken cancellationToken)
     {
         if (!CurrentProfileId(out var currentProfileId)) return Unauthorized();
-        if (profileId != currentProfileId) return Forbid();
+        if (profileId != currentProfileId && !User.IsInRole("Admin")) return Forbid();
         var profileExists = await dbContext.Profiles
             .AnyAsync(profile => profile.Id == profileId, cancellationToken);
         if (!profileExists) return NotFound();
@@ -116,6 +117,8 @@ public sealed class BookingRequestsController(
 
         dbContext.BookingRequests.Add(request);
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (telegramService is not null)
+            await telegramService.SendBookingNotificationAsync(request, profile.FullName, housing.Title, cancellationToken);
         await hubContext.Clients.All.SendAsync(
             "ReceiveNewBooking",
             new BookingCreatedEvent(
@@ -141,6 +144,7 @@ public sealed class BookingRequestsController(
     }
 
     [HttpPut("{id:guid}/status")]
+    [Authorize(Roles = "Landlord,Admin")]
     public async Task<IActionResult> UpdateStatus(
         Guid id,
         UpdateBookingRequestStatusDto body,
@@ -158,13 +162,11 @@ public sealed class BookingRequestsController(
         if (normalizedStatus is null)
             return BadRequest(new { error = "Status must be Pending, Accepted, or Rejected." });
 
-        var tenantId = User.FindFirstValue("TenantId");
-        if (string.IsNullOrWhiteSpace(tenantId)) return Forbid();
         var request = await dbContext.BookingRequests
             .Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
         if (request is null) return NotFound();
-        if (request.Housing.TenantId != tenantId) return Forbid();
+        if (!await CanManageHousingAsync(request.Housing, cancellationToken)) return Forbid();
 
         request.Status = normalizedStatus;
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -175,13 +177,11 @@ public sealed class BookingRequestsController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         if (!CurrentProfileId(out var profileId)) return Unauthorized();
-        var tenantId = User.FindFirstValue("TenantId");
         var request = await dbContext.BookingRequests
             .Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
         if (request is null) return NotFound();
-        if (request.ProfileId != profileId &&
-            (string.IsNullOrWhiteSpace(tenantId) || request.Housing.TenantId != tenantId)) return Forbid();
+        if (!await CanViewRequestAsync(request, profileId, cancellationToken)) return Forbid();
 
         dbContext.BookingRequests.Remove(request);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -190,6 +190,25 @@ public sealed class BookingRequestsController(
 
     private bool CurrentProfileId(out Guid profileId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out profileId);
+
+    private async Task<bool> CanViewRequestAsync(
+        BookingRequest request,
+        Guid profileId,
+        CancellationToken cancellationToken)
+    {
+        if (User.IsInRole("Admin") || request.ProfileId == profileId) return true;
+        return User.IsInRole("Landlord") &&
+            await CanManageHousingAsync(request.Housing, cancellationToken);
+    }
+
+    private Task<bool> CanManageHousingAsync(Housing housing, CancellationToken cancellationToken)
+    {
+        if (User.IsInRole("Admin")) return Task.FromResult(true);
+        if (!CurrentProfileId(out var profileId) || housing.LandlordId != profileId)
+            return Task.FromResult(false);
+        return dbContext.Profiles.AnyAsync(profile =>
+            profile.Id == profileId && profile.Role == "Landlord" && profile.IsApproved, cancellationToken);
+    }
 }
 
 public sealed class CreateBookingRequestDto

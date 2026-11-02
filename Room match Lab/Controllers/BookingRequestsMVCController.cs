@@ -20,13 +20,15 @@ public class BookingRequestsMVCController : Controller
     public async Task<IActionResult> Index()    
     {
         if (!CurrentProfileId(out var profileId)) return Unauthorized();
-        var tenantId = User.FindFirstValue("TenantId");
+        var isAdmin = User.IsInRole("Admin");
+        var isLandlord = User.IsInRole("Landlord");
         return View(await _context.BookingRequests
             .Include(request => request.Profile)
             .Include(request => request.Housing)
             .AsNoTracking()
-            .Where(request => request.ProfileId == profileId ||
-                (!string.IsNullOrWhiteSpace(tenantId) && request.Housing.TenantId == tenantId))
+            .Where(request => isAdmin || request.ProfileId == profileId ||
+                (isLandlord && request.Housing.LandlordId == profileId &&
+                    request.Housing.Landlord.Role == "Landlord" && request.Housing.Landlord.IsApproved))
             .ToListAsync());
     }
 
@@ -47,7 +49,7 @@ public class BookingRequestsMVCController : Controller
         {
             return NotFound();
         }
-        if (!CanView(bookingrequest, profileId)) return Forbid();
+        if (!await CanViewAsync(bookingrequest, profileId)) return Forbid();
 
         return View(bookingrequest);
     }
@@ -67,6 +69,7 @@ public class BookingRequestsMVCController : Controller
     }
 
     // GET: BOOKINGREQUESTS/Edit/5
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     public async Task<IActionResult> Edit(System.Guid? id)
     {
         if (!CanManageRequests()) return Forbid();
@@ -81,7 +84,7 @@ public class BookingRequestsMVCController : Controller
         {
             return NotFound();
         }
-        if (!CanManageHousing(bookingrequest.Housing)) return Forbid();
+        if (!await CanManageHousingAsync(bookingrequest.Housing)) return Forbid();
         return View(bookingrequest);
     }
 
@@ -89,6 +92,7 @@ public class BookingRequestsMVCController : Controller
     // To protect from overposting attacks, enable the specific properties you want to bind to.
     // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
     [HttpPost]
+    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(System.Guid? id, [Bind("Id,ProfileId,Profile,HousingId,Housing,MatchScore,Status,CreatedAt")] BookingRequest bookingrequest)
     {
@@ -97,7 +101,7 @@ public class BookingRequestsMVCController : Controller
         var existing = await _context.BookingRequests.Include(request => request.Housing)
             .FirstOrDefaultAsync(request => request.Id == id);
         if (existing is null) return NotFound();
-        if (!CanManageHousing(existing.Housing)) return Forbid();
+        if (!await CanManageHousingAsync(existing.Housing)) return Forbid();
         if (string.IsNullOrWhiteSpace(bookingrequest.Status))
         {
             ModelState.AddModelError(nameof(bookingrequest.Status), "Choose Pending, Accepted, or Rejected.");
@@ -135,7 +139,7 @@ public class BookingRequestsMVCController : Controller
         {
             return NotFound();
         }
-        if (!CanView(bookingrequest, profileId)) return Forbid();
+        if (!await CanViewAsync(bookingrequest, profileId)) return Forbid();
 
         return View(bookingrequest);
     }
@@ -150,7 +154,7 @@ public class BookingRequestsMVCController : Controller
             .FirstOrDefaultAsync(request => request.Id == id);
         if (bookingrequest != null)
         {
-            if (!CanView(bookingrequest, profileId)) return Forbid();
+            if (!await CanViewAsync(bookingrequest, profileId)) return Forbid();
             _context.BookingRequests.Remove(bookingrequest);
         }
 
@@ -161,15 +165,19 @@ public class BookingRequestsMVCController : Controller
     private bool CurrentProfileId(out Guid profileId) =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out profileId);
 
-    private bool CanView(BookingRequest request, Guid profileId) =>
-        request.ProfileId == profileId || CanManageHousing(request.Housing);
+    private async Task<bool> CanViewAsync(BookingRequest request, Guid profileId) =>
+        User.IsInRole("Admin") || request.ProfileId == profileId ||
+        (User.IsInRole("Landlord") && await CanManageHousingAsync(request.Housing));
 
-    private bool CanManageRequests() => !string.IsNullOrWhiteSpace(User.FindFirstValue("TenantId"));
+    private bool CanManageRequests() => User.IsInRole("Admin") || User.IsInRole("Landlord");
 
-    private bool CanManageHousing(Housing housing)
+    private async Task<bool> CanManageHousingAsync(Housing housing)
     {
-        var tenantId = User.FindFirstValue("TenantId");
-        return !string.IsNullOrWhiteSpace(tenantId) && housing.TenantId == tenantId;
+        if (User.IsInRole("Admin")) return true;
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId) ||
+            housing.LandlordId != profileId) return false;
+        return await _context.Profiles.AnyAsync(profile =>
+            profile.Id == profileId && profile.Role == "Landlord" && profile.IsApproved);
     }
 
 }

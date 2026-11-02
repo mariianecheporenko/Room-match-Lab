@@ -19,6 +19,11 @@ public class Profile
     [StringLength(100)]
     public string? TenantId { get; set; }
 
+    [Required, StringLength(20)]
+    public string Role { get; set; } = "Student";
+
+    public bool IsApproved { get; set; } = false;
+
     public bool EnableDetailedAnalytics { get; set; } = false;
     public bool IsCrossUniversity { get; set; } = false;
 

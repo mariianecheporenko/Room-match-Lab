@@ -6,25 +6,45 @@
     <title>@ViewData["Title"] - RoomMates</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
 </head>
-<body class="bg-light">
+@{
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+    var currentUserEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
+    var isApprovedLandlord = User.IsInRole("Landlord") &&
+        bool.TryParse(User.FindFirst("IsApproved")?.Value, out var landlordApproved) && landlordApproved;
+    var canAddHousing = User.IsInRole("Admin") || isApprovedLandlord;
+}
+<body class="bg-light" data-current-user-id="@currentUserId" data-current-user-email="@currentUserEmail" data-current-role="@User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value" data-current-approved="@User.FindFirst("IsApproved")?.Value">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
     <div class="container">
         <a class="navbar-brand fw-semibold" asp-controller="HousingsMvc" asp-action="Index">RoomMates</a>
         <div class="navbar-nav flex-row gap-3">
             <a class="nav-link" asp-controller="HousingsMvc" asp-action="Index">Housings</a>
+            @if (canAddHousing)
+            {
+                <a class="nav-link add-housing-btn" id="addHousingNavLink" asp-controller="HousingsMvc" asp-action="Create">Add housing</a>
+            }
             <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Index">Profiles</a>
             <a class="nav-link" asp-controller="BookingRequestsMVC" asp-action="Index">Bookings</a>
             <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Password">Account</a>
+            @if (User.IsInRole("Admin"))
+            {
+                <a class="nav-link" asp-controller="ProfilesMVC" asp-action="Admin">Admin</a>
+            }
             <a class="nav-link" id="authLoginLink" href="/ProfilesMVC/Create">Sign in with Google</a>
             <button class="btn btn-sm btn-outline-light my-1" id="authLogoutButton" type="button" hidden>Sign out</button>
         </div>
     </div>
 </nav>
+<div class="container pt-3">
+    <div id="landlord-live-status" class="alert d-none" role="status" aria-live="polite"></div>
+</div>
 <main class="container py-5">
     @RenderBody()
 </main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 <script src="~/js/roommates-auth.js"></script>
+<script src="~/js/roommates-realtime.js"></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

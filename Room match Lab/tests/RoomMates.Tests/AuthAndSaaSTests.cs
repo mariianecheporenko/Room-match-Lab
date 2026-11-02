@@ -59,6 +59,8 @@ public sealed class AuthAndSaaSTests
         knuToken.Claims.Should().Contain(claim =>
             claim.Type == "EnableDetailedAnalytics" && claim.Value == "True");
         knuToken.Claims.Should().Contain(claim => claim.Type == "IsCrossUniversity" && claim.Value == "False");
+        knuToken.Claims.Should().Contain(claim => claim.Type == ClaimTypes.Role && claim.Value == knuProfile.Role);
+        knuToken.Claims.Should().Contain(claim => claim.Type == "IsApproved" && claim.Value == knuProfile.IsApproved.ToString());
         knuToken.Issuer.Should().Be(JwtIssuer);
         knuToken.Audiences.Should().Contain(JwtAudience);
 
@@ -67,6 +69,8 @@ public sealed class AuthAndSaaSTests
         generalToken.Claims.Should().Contain(claim =>
             claim.Type == "EnableDetailedAnalytics" && claim.Value == "False");
         generalToken.Claims.Should().Contain(claim => claim.Type == "IsCrossUniversity" && claim.Value == "True");
+        generalToken.Claims.Should().Contain(claim => claim.Type == ClaimTypes.Role && claim.Value == generalProfile.Role);
+        generalToken.Claims.Should().Contain(claim => claim.Type == "IsApproved" && claim.Value == generalProfile.IsApproved.ToString());
     }
 
     [Fact]

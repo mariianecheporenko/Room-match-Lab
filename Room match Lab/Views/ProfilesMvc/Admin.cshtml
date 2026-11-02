@@ -1,0 +1,232 @@
+@model IReadOnlyList<RoomMates.Models.Profile>
+@{
+    ViewData["Title"] = "User administration";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">User administration</h1>
+        <p class="text-secondary mb-0">Review all accounts and approve landlord applications.</p>
+    </div>
+    <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Add housing</a>
+</div>
+
+<div id="admin-status" class="alert d-none" role="status" aria-live="polite"></div>
+<div class="card shadow-sm border-0"><div class="table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0">
+        <thead class="table-dark"><tr><th>Name</th><th>Email</th><th>Role</th><th>Approval</th><th class="text-end">Action</th></tr></thead>
+        <tbody>
+        @foreach (var profile in Model)
+        {
+            <tr data-user-id="@profile.Id" data-user-email="@profile.Email">
+                <td class="fw-semibold">@profile.FullName</td>
+                <td class="profile-email">@profile.Email</td>
+                <td class="profile-role">@profile.Role</td>
+                <td class="profile-approval">
+                    @if (profile.Role == "Landlord" && !profile.IsApproved)
+                    {
+                        <span class="badge text-bg-warning">Pending</span>
+                    }
+                    else if (profile.Role == "Landlord")
+                    {
+                        <span class="badge text-bg-success">Approved</span>
+                    }
+                    else
+                    {
+                        <span class="text-secondary">—</span>
+                    }
+                </td>
+                <td class="text-end">
+                    @if (profile.Role == "Landlord" && !profile.IsApproved)
+                    {
+                        <form class="landlord-role-form mb-1" data-operation="approve" asp-action="ApproveLandlord" asp-route-id="@profile.Id" method="post">
+                            <button class="btn btn-sm btn-success" type="submit">Approve as landlord</button>
+                        </form>
+                    }
+                    @if (profile.Role == "Landlord")
+                    {
+                        <form class="landlord-role-form" data-operation="revoke" asp-action="RevokeLandlord" asp-route-id="@profile.Id" method="post">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Remove landlord role</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div></div>
+<form id="admin-antiforgery" class="d-none">@Html.AntiForgeryToken()</form>
+
+<style>
+    .flash-green { animation: highlightGreen 2s ease-out; }
+    .flash-red { animation: highlightRed 2s ease-out; }
+    .flash-yellow { animation: highlightYellow 2s ease-out; }
+    .flash-green > * { animation: highlightGreen 2s ease-out; }
+    .flash-red > * { animation: highlightRed 2s ease-out; }
+    .flash-yellow > * { animation: highlightYellow 2s ease-out; }
+    @@keyframes highlightGreen { 0% { background-color: #d4edda; } 100% { background-color: transparent; } }
+    @@keyframes highlightRed { 0% { background-color: #f8d7da; } 100% { background-color: transparent; } }
+    @@keyframes highlightYellow { 0% { background-color: #fff3cd; } 100% { background-color: transparent; } }
+</style>
+
+@section Scripts {
+    <script>
+        (() => {
+            const status = document.getElementById("admin-status");
+            const showStatus = (message, style = "success") => {
+                status.textContent = message;
+                status.className = `alert alert-${style}`;
+            };
+            const tableBody = document.querySelector(".table tbody");
+            const findRow = (userId, email) => Array.from(tableBody.querySelectorAll("tr[data-user-id], tr[data-user-email]"))
+                .find(row => (userId && row.dataset.userId?.toLowerCase() === String(userId).toLowerCase()) ||
+                    (email && row.dataset.userEmail?.toLowerCase() === String(email).toLowerCase()));
+            const addCell = (row, className, value) => {
+                const cell = document.createElement("td");
+                if (className) cell.className = className;
+                cell.textContent = value ?? "";
+                row.append(cell);
+                return cell;
+            };
+            const makeActionForm = (userId, operation) => {
+                const form = document.createElement("form");
+                form.className = "landlord-role-form" + (operation === "approve" ? " mb-1" : "");
+                form.dataset.operation = operation;
+                const action = operation === "approve" ? "ApproveLandlord" : "RevokeLandlord";
+                form.action = `/ProfilesMVC/${action}?id=${encodeURIComponent(userId)}`;
+                form.method = "post";
+                const token = document.querySelector("#admin-antiforgery input[name='__RequestVerificationToken']")?.value;
+                if (token) {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "__RequestVerificationToken";
+                    input.value = token;
+                    form.append(input);
+                }
+                const button = document.createElement("button");
+                button.className = operation === "approve" ? "btn btn-sm btn-success" : "btn btn-sm btn-outline-danger";
+                button.type = "submit";
+                button.textContent = operation === "approve" ? "Approve as landlord" : "Remove landlord role";
+                form.append(button);
+                return form;
+            };
+            const renderActions = (row, user) => {
+                const actions = row.querySelector(".text-end");
+                actions.replaceChildren();
+                if (user.role === "Landlord" && !user.isApproved)
+                    actions.append(makeActionForm(user.userId, "approve"));
+                if (user.role === "Landlord")
+                    actions.append(makeActionForm(user.userId, "revoke"));
+            };
+            const upsertRow = user => {
+                let row = findRow(user.userId, user.email);
+                if (!row) {
+                    row = document.createElement("tr");
+                    row.dataset.userId = user.userId;
+                    row.dataset.userEmail = user.email;
+                    addCell(row, "fw-semibold", user.name);
+                    addCell(row, "profile-email", user.email);
+                    addCell(row, "profile-role", user.role);
+                    addCell(row, "profile-approval", "");
+                    addCell(row, "text-end", "");
+                    tableBody.prepend(row);
+                }
+                row.dataset.userId = user.userId;
+                row.dataset.userEmail = user.email;
+                row.querySelector(".fw-semibold").textContent = user.name || user.email;
+                row.querySelector(".profile-email").textContent = user.email;
+                row.querySelector(".profile-role").textContent = user.role;
+                const approval = row.querySelector(".profile-approval");
+                if (user.role === "Landlord") {
+                    const badge = document.createElement("span");
+                    badge.className = `badge ${user.isApproved ? "text-bg-success" : "text-bg-warning"}`;
+                    badge.textContent = user.isApproved ? "Approved" : "Pending";
+                    approval.replaceChildren(badge);
+                } else {
+                    approval.innerHTML = '<span class="text-secondary">—</span>';
+                }
+                renderActions(row, user);
+                row.classList.remove("flash-green", "flash-red", "flash-yellow");
+                void row.offsetWidth;
+                row.classList.add(user.role === "Student" ? "flash-red" : (user.isApproved ? "flash-green" : "flash-yellow"));
+                return row;
+            };
+            const applyStatusUpdate = user => {
+                upsertRow(user);
+                if (user.role === "Student") showStatus(`Landlord role removed from ${user.name}.`);
+                else showStatus(user.isApproved
+                    ? `${user.name} was approved as a landlord.`
+                    : `${user.name}'s landlord application is pending.`);
+            };
+
+            tableBody.addEventListener("submit", async event => {
+                const form = event.target.closest(".landlord-role-form");
+                if (!form) return;
+                event.preventDefault();
+                const operation = form.dataset.operation;
+                if (operation === "revoke" && !window.confirm("Remove this user's landlord role?")) return;
+
+                const sourceRow = form.closest("tr");
+                if (!sourceRow) return;
+                const fallbackEmail = sourceRow.dataset.userEmail || sourceRow.querySelector(".profile-email")?.textContent || "";
+                const button = form.querySelector("button[type='submit']");
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.textContent = operation === "approve" ? "Approving…" : "Removing…";
+                status.className = "alert d-none";
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: "POST",
+                        body: new FormData(form),
+                        credentials: "same-origin",
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+                    if (!response.ok) {
+                        const result = await response.json().catch(() => ({}));
+                        throw new Error(result.error || "Could not update this account. Please try again.");
+                    }
+
+                    const result = await response.json();
+                    applyStatusUpdate({
+                        userId: result.id,
+                        name: result.name,
+                        email: result.email || fallbackEmail,
+                        role: result.role || "Landlord",
+                        isApproved: result.isApproved
+                    });
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                    showStatus(error.message || "Could not reach the server. Please try again.", "danger");
+                }
+            });
+
+            if (window.signalR) {
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/bookingHub")
+                    .withAutomaticReconnect()
+                    .build();
+                connection.on("LandlordStatusUpdated", event => applyStatusUpdate({
+                    userId: event.userId,
+                    name: event.name,
+                    email: event.email,
+                    role: event.role,
+                    isApproved: event.isApproved
+                }));
+                connection.on("NewLandlordApplication", event => applyStatusUpdate({
+                    userId: event.userId,
+                    name: event.name,
+                    email: event.email,
+                    role: event.role,
+                    isApproved: event.isApproved
+                }));
+                const start = () => connection.start().catch(error => {
+                    console.error("Admin live updates failed; retrying in five seconds.", error);
+                    window.setTimeout(start, 5000);
+                });
+                start();
+            }
+        })();
+    </script>
+}

@@ -4,13 +4,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
 using RoomMates.Models;
+using RoomMates.Services;
+using RoomMates.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace RoomMates.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public sealed class ProfilesController(RoomMatesDbContext dbContext) : ControllerBase
+public sealed class ProfilesController(
+    RoomMatesDbContext dbContext,
+    ITelegramNotificationService? telegramService = null,
+    IHubContext<BookingHub>? hubContext = null) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<Profile>>> GetAll(
@@ -27,6 +33,15 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         return Ok(profiles);
     }
 
+    [HttpGet("me")]
+    public async Task<ActionResult<Profile>> GetMe(CancellationToken cancellationToken)
+    {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var profile = await ProfilesWithDetails()
+            .FirstOrDefaultAsync(profile => profile.Id == profileId, cancellationToken);
+        return profile is null ? NotFound() : Ok(profile);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Profile>> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -40,6 +55,33 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
 
     [HttpPost]
     public IActionResult Create() => Forbid();
+
+    [HttpPost("me/request-landlord")]
+    public async Task<IActionResult> RequestLandlordStatus(CancellationToken cancellationToken)
+    {
+        if (!CurrentProfileId(out var profileId)) return Unauthorized();
+        var profile = await dbContext.Profiles.FirstOrDefaultAsync(
+            existing => existing.Id == profileId, cancellationToken);
+        if (profile is null) return NotFound();
+        if (profile.Role == "Admin") return BadRequest(new { error = "Admin accounts do not need landlord approval." });
+        if (profile.Role == "Landlord")
+            return profile.IsApproved
+                ? Conflict(new { error = "This account is already an approved landlord." })
+                : Conflict(new { error = "Your landlord application is already pending." });
+
+        profile.Role = "Landlord";
+        profile.IsApproved = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        if (telegramService is not null)
+            await telegramService.SendLandlordApplicationNotificationAsync(profile, cancellationToken);
+        if (hubContext is not null)
+            await hubContext.Clients.Group(BookingHub.AdminsGroup).SendAsync(
+                "NewLandlordApplication",
+                new NewLandlordApplicationEvent(profile.Id, profile.Email, profile.FullName, profile.Role, profile.IsApproved),
+                cancellationToken);
+
+        return Ok(new { message = "Your landlord application was submitted and is pending admin approval." });
+    }
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
@@ -120,6 +162,9 @@ public sealed class ProfilesController(RoomMatesDbContext dbContext) : Controlle
         var criteria = request.CustomCriterionValues ?? [];
         if (criteria.GroupBy(value => value.LifestyleCriterionId).Any(group => group.Count() > 1))
             return "A custom criterion can only be specified once per profile.";
+
+        if ((request.TagIds ?? []).Distinct().Count() > 5)
+            return "A profile can have at most five tags.";
 
         return null;
     }
