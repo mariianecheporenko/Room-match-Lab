@@ -21,6 +21,14 @@ public static class DbInitializer
         SeedProfileTags(context, profiles, tags);
         SeedHousings(context, profiles);
         SeedHousingTags(context, tags);
+
+        var adminProfile = context.Profiles.FirstOrDefault(p => p.Email == "adminroommates@gmail.com");
+        if (adminProfile != null)
+        {
+            adminProfile.Role = "Admin";
+            adminProfile.IsApproved = true;
+            context.SaveChanges();
+        }
     }
 
     private static Dictionary<string, Tag> SeedTags(RoomMatesDbContext context)
