@@ -10,6 +10,9 @@ using RoomMates.Models.Options;
 using RoomMates.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var cultureInfo = new System.Globalization.CultureInfo("uk-UA");
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
 // Add services to the container.
 

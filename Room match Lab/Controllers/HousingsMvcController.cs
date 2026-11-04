@@ -106,7 +106,7 @@ public class HousingsMvcController(
     [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing,
+        [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,ImageUrl,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing,
         IFormFile? imageFile)
     {
         var currentProfile = await FindCurrentProfileAsync();
@@ -120,7 +120,9 @@ public class HousingsMvcController(
             return View(housing);
         }
 
-        housing.ImageUrl = DefaultHousingImageUrl;
+        housing.ImageUrl = string.IsNullOrWhiteSpace(housing.ImageUrl)
+            ? DefaultHousingImageUrl
+            : housing.ImageUrl.Trim();
         if (imageFile is { Length: > 0 } && fileStorageService is not null)
         {
             try

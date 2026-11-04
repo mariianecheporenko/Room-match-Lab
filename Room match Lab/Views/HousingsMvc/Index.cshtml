@@ -7,9 +7,10 @@
             <h1 class="h2 mb-1">Available housings</h1>
             <p class="text-secondary mb-0">Browse current room listings.</p>
         </div>
-        @if (!string.IsNullOrWhiteSpace(User.FindFirst("TenantId")?.Value))
+        @if (User.IsInRole("Admin") ||
+             (User.IsInRole("Landlord") && User.FindFirst("IsApproved")?.Value == "True"))
         {
-            <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Create New</a>
+            <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Create New Housing</a>
         }
     </div>
     @if (TempData["HousingSuccess"] is string successMessage)
