@@ -5,11 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoomMates.Data;
 using RoomMates.Models;
+using RoomMates.Services;
 
 [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
-public class HousingsMvcController(RoomMatesDbContext context) : Controller
+public class HousingsMvcController(
+    RoomMatesDbContext context,
+    IFileStorageService? fileStorageService = null,
+    ILogger<HousingsMvcController>? logger = null) : Controller
 {
+    private const string DefaultHousingImageUrl = "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80";
     private readonly RoomMatesDbContext _context = context;
+    private readonly ILogger<HousingsMvcController> _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<HousingsMvcController>.Instance;
 
     [AllowAnonymous]
     public async Task<IActionResult> Index()
@@ -100,7 +106,8 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
     [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme, Roles = "Landlord,Admin")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing)
+        [Bind("Title,City,District,Street,BuildingNumber,ApartmentNumber,Latitude,Longitude,PricePerMonth,PetPolicy,HasExistingPets,AllowsSmoking,RequiredCleanliness,RequiredSleepSchedule,RequiredPartyTolerance")] Housing housing,
+        IFormFile? imageFile)
     {
         var currentProfile = await FindCurrentProfileAsync();
         if (currentProfile is null) return Forbid();
@@ -113,12 +120,42 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             return View(housing);
         }
 
+        housing.ImageUrl = DefaultHousingImageUrl;
+        if (imageFile is { Length: > 0 } && fileStorageService is not null)
+        {
+            try
+            {
+                housing.ImageUrl = await fileStorageService.UploadFileAsync(imageFile);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Could not upload a photo for new housing {Title}.", housing.Title);
+                TempData["HousingUploadWarning"] = "Фото не завантажилося. Житло збережено з типовим зображенням.";
+            }
+        }
+        else if (imageFile is { Length: > 0 })
+        {
+            _logger.LogWarning("No file storage service is available; housing {Title} will use the default image.", housing.Title);
+            TempData["HousingUploadWarning"] = "Фото не завантажилося. Житло збережено з типовим зображенням.";
+        }
+
         housing.Id = Guid.NewGuid();
         housing.TenantId = currentProfile.TenantId;
         housing.LandlordId = currentProfile.Id;
         housing.Landlord = currentProfile;
         _context.Housings.Add(housing);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+        {
+            _logger.LogError(exception, "Could not save new housing {Title}.", housing.Title);
+            ModelState.AddModelError(string.Empty, "Не вдалося зберегти житло. Перевірте дані та спробуйте ще раз.");
+            return View(housing);
+        }
+
+        TempData["HousingSuccess"] = "Житло успішно додано.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -162,7 +199,13 @@ public class HousingsMvcController(RoomMatesDbContext context) : Controller
             out var parsedCrossUniversity) && parsedCrossUniversity;
 
         if (!User.IsInRole("Admin") && !isCrossUniversity && !string.IsNullOrWhiteSpace(tenantId))
-            housings = housings.Where(housing => housing.TenantId == tenantId || housing.TenantId == null);
+        {
+            var ownsListing = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var profileId);
+            housings = housings.Where(housing =>
+                housing.TenantId == tenantId ||
+                housing.TenantId == null ||
+                (ownsListing && housing.LandlordId == profileId));
+        }
 
         return housings;
     }

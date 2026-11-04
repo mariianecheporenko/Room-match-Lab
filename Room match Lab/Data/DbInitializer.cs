@@ -289,17 +289,23 @@ public static class DbInitializer
         var housings = new[]
         {
             NewHousing("Світла кімната біля ВДНГ / КНУ", "KNU", 7500, false, PetPolicy.Allowed,
-                "вул. Ломоносова", "55", "Голосіївський", 50.3845, 30.4851, 4, 4, 2),
+                "вул. Ломоносова", "55", "Голосіївський", 50.3845, 30.4851, 4, 4, 2,
+                "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80"),
             NewHousing("2-кімнатна квартира на Подолі для студентів КПІ", "KPI", 11000, true, PetPolicy.Conditional,
-                "вул. Спаська", "12", "Подільський", 50.4655, 30.5180, 3, 2, 4),
+                "вул. Спаська", "12", "Подільський", 50.4655, 30.5180, 3, 2, 4,
+                "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800&q=80"),
             NewHousing("Затишна студія біля НаУКМА (Без тварин)", "NaUKMA", 9500, false, PetPolicy.NotAllowed,
-                "вул. Іллінська", "8", "Подільський", 50.4670, 30.5220, 5, 5, 1),
+                "вул. Іллінська", "8", "Подільський", 50.4670, 30.5220, 5, 5, 1,
+                "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80"),
             NewHousing("Загальна квартира для студентів, центр Києва", null, 8500, false, PetPolicy.Conditional,
-                "вул. Хрещатик", "10", "Шевченківський", 50.4501, 30.5234, 3, 3, 3),
+                "вул. Хрещатик", "10", "Шевченківський", 50.4501, 30.5234, 3, 3, 3,
+                "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800&q=80"),
             NewHousing("Кімната для перевірки заборони куріння", "KNU", 4500, false, PetPolicy.Allowed,
-                "вул. Васильківська", "21", "Голосіївський", 50.3940, 30.5070, 1, 1, 5),
+                "вул. Васильківська", "21", "Голосіївський", 50.3940, 30.5070, 1, 1, 5,
+                "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&q=80"),
             NewHousing("Квартира за домовленістю щодо тварин", "KNU", 8500, true, PetPolicy.Conditional,
-                "вул. Велика Васильківська", "42", "Печерський", 50.4250, 30.5200, 4, 4, 2)
+                "вул. Велика Васильківська", "42", "Печерський", 50.4250, 30.5200, 4, 4, 2,
+                "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&q=80")
         };
 
         var landlordEmailsByHousing = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -329,6 +335,9 @@ public static class DbInitializer
                 housing.LandlordId = landlord.Id;
                 housing.Landlord = landlord;
             }
+
+            if (housing is not null && string.IsNullOrWhiteSpace(housing.ImageUrl))
+                housing.ImageUrl = seed.ImageUrl;
         }
 
         context.SaveChanges();
@@ -347,7 +356,8 @@ public static class DbInitializer
         double longitude,
         int cleanliness,
         int sleepSchedule,
-        int partyTolerance) => new()
+        int partyTolerance,
+        string imageUrl) => new()
     {
         Id = Guid.NewGuid(),
         Title = title,
@@ -355,6 +365,7 @@ public static class DbInitializer
         City = "Київ",
         Street = street,
         BuildingNumber = buildingNumber,
+        ImageUrl = imageUrl,
         District = district,
         Latitude = latitude,
         Longitude = longitude,

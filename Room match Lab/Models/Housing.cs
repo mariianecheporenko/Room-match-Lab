@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace RoomMates.Models;
 
@@ -7,6 +8,7 @@ public class Housing
     public Guid Id { get; set; }
 
     public Guid LandlordId { get; set; }
+    [ValidateNever]
     public Profile Landlord { get; set; } = null!;
 
     [Required, StringLength(200)] public string Title { get; set; } = string.Empty;
@@ -16,6 +18,7 @@ public class Housing
     [Required, StringLength(200)] public string Street { get; set; } = string.Empty;
     [Required, StringLength(30)] public string BuildingNumber { get; set; } = string.Empty;
     [StringLength(30)] public string? ApartmentNumber { get; set; }
+    public string? ImageUrl { get; set; }
 
     public double Latitude { get; set; }
     public double Longitude { get; set; }

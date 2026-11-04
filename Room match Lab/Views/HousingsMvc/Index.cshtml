@@ -12,6 +12,14 @@
             <a class="btn btn-primary" asp-controller="HousingsMvc" asp-action="Create">Create New</a>
         }
     </div>
+    @if (TempData["HousingSuccess"] is string successMessage)
+    {
+        <div class="alert alert-success" role="status">@successMessage</div>
+    }
+    @if (TempData["HousingUploadWarning"] is string uploadWarning)
+    {
+        <div class="alert alert-warning" role="status">@uploadWarning</div>
+    }
     <section class="card shadow-sm mb-4" aria-labelledby="housing-map-heading">
         <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
@@ -38,16 +46,17 @@
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle mb-0">
                 <thead class="table-dark">
-                    <tr><th>Title</th><th>Price</th><th>City</th><th>District</th><th class="text-end">Actions</th></tr>
+                    <tr><th>Photo</th><th>Title</th><th>Price</th><th>City</th><th>District</th><th class="text-end">Actions</th></tr>
                 </thead>
                 <tbody>
                 @if (!Model.Any())
                 {
-                    <tr><td colspan="5" class="text-center text-secondary py-4">No housing listings yet.</td></tr>
+                    <tr><td colspan="6" class="text-center text-secondary py-4">No housing listings yet.</td></tr>
                 }
                 @foreach (var housing in Model)
                 {
                     <tr>
+                        <td><img src="@(housing.ImageUrl ?? "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80")" alt="Фото житла: @housing.Title" class="rounded object-fit-cover" width="96" height="64" /></td>
                         <td class="fw-semibold">@housing.Title</td>
                         <td>@housing.PricePerMonth.ToString("C")</td>
                         <td>@housing.City</td>

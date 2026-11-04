@@ -6,8 +6,8 @@ using Microsoft.OpenApi;
 using Room_match_Lab.Data;
 using RoomMates.Data;
 using RoomMates.Hubs;
-using RoomMates.Services;
 using RoomMates.Models.Options;
+using RoomMates.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +23,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSignalR();
 builder.Services.Configure<TelegramBotOptions>(builder.Configuration.GetSection(TelegramBotOptions.SectionName));
 builder.Services.AddHttpClient<ITelegramNotificationService, TelegramNotificationService>();
+builder.Services.AddScoped<IFileStorageService, CloudinaryStorageService>();
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]
     ?? throw new InvalidOperationException("Jwt:Issuer is not configured.");
 var jwtAudience = builder.Configuration["Jwt:Audience"]

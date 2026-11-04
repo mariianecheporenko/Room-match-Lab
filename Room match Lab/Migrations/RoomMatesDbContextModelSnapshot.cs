@@ -82,6 +82,9 @@ namespace Room_match_Lab.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
                     b.Property<bool>("HasExistingPets")
                         .HasColumnType("boolean");
 
